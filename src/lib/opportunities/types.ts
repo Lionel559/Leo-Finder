@@ -28,11 +28,22 @@ export const applicationStatuses = [
 export type OpportunityCategory = (typeof opportunityCategories)[number]["value"];
 export type RemoteStatus = (typeof remoteStatuses)[number]["value"];
 export type ApplicationStatus = (typeof applicationStatuses)[number]["value"];
-export type OpportunitySort = "newest" | "deadline";
+export type OpportunitySort = "newest" | "deadline" | "salary_prize_amount";
 
 export type OpportunityApplicationState = {
   id: string;
   status: ApplicationStatus;
+};
+
+export type OpportunityMatch = {
+  overallScore: number;
+  skillMatchScore: number;
+  preferenceMatchScore: number;
+  experienceMatchScore: number;
+  historyMatchScore: number;
+  reasons: string[];
+  missingSkills: string[];
+  recommendation: string;
 };
 
 export type Opportunity = {
@@ -54,6 +65,7 @@ export type Opportunity = {
   createdAt: string;
   updatedAt: string;
   matchScore: number;
+  match: OpportunityMatch | null;
   isSaved: boolean;
   application: OpportunityApplicationState | null;
 };

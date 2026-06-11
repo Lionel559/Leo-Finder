@@ -8,6 +8,20 @@ import type {
   AIProviderName,
 } from "./types";
 
+type AIMatchExplanationInput = {
+  opportunity: {
+    title: string;
+    organization: string;
+    category: string;
+    skills: string[];
+  };
+  match: {
+    overallScore: number;
+    reasons: string[];
+    missingSkills: string[];
+  };
+};
+
 export class AIService {
   private readonly provider: AIProvider;
 
@@ -32,6 +46,26 @@ export class AIService {
 
   generateText(input: AIGenerateTextInput): Promise<AIGenerateTextResult> {
     return this.provider.generateText(input);
+  }
+
+  generateMatchExplanation(
+    input: AIMatchExplanationInput,
+  ): Promise<AIGenerateTextResult> {
+    return this.generateText({
+      maxTokens: 160,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You explain opportunity matches for Leo Finder in concise, practical language.",
+        },
+        {
+          role: "user",
+          content: JSON.stringify(input),
+        },
+      ],
+    });
   }
 }
 

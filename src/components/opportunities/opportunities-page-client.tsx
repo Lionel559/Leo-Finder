@@ -16,6 +16,28 @@ type OpportunitiesResponse = {
   total: number;
 };
 
+type RecommendationsResponse = {
+  opportunities: Opportunity[];
+  total: number;
+};
+
+function mergeMatches(
+  opportunities: Opportunity[],
+  recommendations: Opportunity[],
+) {
+  const recommendationById = new Map(
+    recommendations.map((opportunity) => [opportunity.id, opportunity]),
+  );
+
+  return opportunities.map((opportunity) => ({
+    ...opportunity,
+    match: recommendationById.get(opportunity.id)?.match ?? opportunity.match,
+    matchScore:
+      recommendationById.get(opportunity.id)?.matchScore ??
+      opportunity.matchScore,
+  }));
+}
+
 function FeedSkeleton() {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
@@ -46,7 +68,7 @@ export function OpportunitiesPageClient() {
 
     if (keyword.trim()) params.set("q", keyword.trim());
     if (category) params.set("category", category);
-    if (remoteStatus) params.set("remoteStatus", remoteStatus);
+    if (remoteStatus) params.set("remote_status", remoteStatus);
     if (location.trim()) params.set("location", location.trim());
     if (skills.trim()) params.set("skills", skills.trim());
     params.set("sort", sort);
@@ -65,9 +87,28 @@ export function OpportunitiesPageClient() {
         const data = await fetchApi<OpportunitiesResponse>(
           `/api/v1/opportunities?${queryString}`,
         );
+        let nextOpportunities = data.opportunities;
+
+        try {
+          const recommendations = await fetchApi<RecommendationsResponse>(
+            "/api/v1/recommendations?limit=50",
+          );
+
+          nextOpportunities = mergeMatches(
+            nextOpportunities,
+            recommendations.opportunities,
+          );
+        } catch (recommendationError) {
+          console.warn("[opportunities] recommendations enrichment skipped", {
+            error:
+              recommendationError instanceof Error
+                ? recommendationError.message
+                : String(recommendationError),
+          });
+        }
 
         if (isMounted) {
-          setOpportunities(data.opportunities);
+          setOpportunities(nextOpportunities);
           setTotal(data.total);
         }
       } catch (caughtError) {
@@ -160,6 +201,7 @@ export function OpportunitiesPageClient() {
           >
             <option value="newest">Newest</option>
             <option value="deadline">Deadline</option>
+            <option value="salary_prize_amount">Salary / reward</option>
           </select>
         </div>
       </section>

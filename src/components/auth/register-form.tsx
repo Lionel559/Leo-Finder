@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
+import { PasswordInput } from "@/components/auth/password-input";
 import type { ApiResponse } from "@/types";
 
 type RegisterPayload = {
@@ -18,6 +19,82 @@ type RegisterResponse = {
     email?: string;
   };
 };
+
+type PasswordStrength = "Weak" | "Medium" | "Strong";
+
+const strengthStyles: Record<
+  PasswordStrength,
+  {
+    bar: string;
+    filledSegments: number;
+    label: string;
+  }
+> = {
+  Weak: {
+    bar: "bg-red-400",
+    filledSegments: 1,
+    label: "text-red-600",
+  },
+  Medium: {
+    bar: "bg-amber-400",
+    filledSegments: 2,
+    label: "text-amber-600",
+  },
+  Strong: {
+    bar: "bg-[#10B981]",
+    filledSegments: 3,
+    label: "text-[#059669]",
+  },
+};
+
+function getPasswordStrength(password: string): PasswordStrength {
+  const checks = [
+    password.length >= 8,
+    /[a-z]/.test(password),
+    /[A-Z]/.test(password),
+    /\d/.test(password),
+    /[^A-Za-z0-9]/.test(password),
+    password.length >= 12,
+  ];
+  const score = checks.filter(Boolean).length;
+
+  if (score >= 5) {
+    return "Strong";
+  }
+
+  if (score >= 3) {
+    return "Medium";
+  }
+
+  return "Weak";
+}
+
+function PasswordStrengthIndicator({
+  strength,
+}: {
+  strength: PasswordStrength;
+}) {
+  const styles = strengthStyles[strength];
+
+  return (
+    <div className="space-y-2" aria-live="polite">
+      <div className="flex items-center justify-between gap-3 text-xs font-medium">
+        <span className="text-slate-500">Password strength</span>
+        <span className={styles.label}>{strength}</span>
+      </div>
+      <div className="grid h-1.5 grid-cols-3 gap-1">
+        {[0, 1, 2].map((segment) => (
+          <span
+            key={segment}
+            className={`rounded-full ${
+              segment < styles.filledSegments ? styles.bar : "bg-slate-200"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 async function register(payload: RegisterPayload) {
   const response = await fetch("/api/v1/auth/register", {
@@ -42,8 +119,12 @@ export function RegisterForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
+    useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const passwordStrength = getPasswordStrength(password);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -117,17 +198,17 @@ export function RegisterForm() {
           >
             Password
           </label>
-          <input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             autoComplete="new-password"
-            required
             minLength={8}
             value={password}
+            isVisible={isPasswordVisible}
             onChange={(event) => setPassword(event.target.value)}
-            className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-[#0F172A] outline-none transition focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981]/20"
+            onToggle={() => setIsPasswordVisible((visible) => !visible)}
           />
+          <PasswordStrengthIndicator strength={passwordStrength} />
         </div>
 
         <div className="space-y-2">
@@ -137,16 +218,17 @@ export function RegisterForm() {
           >
             Confirm password
           </label>
-          <input
+          <PasswordInput
             id="confirmPassword"
             name="confirmPassword"
-            type="password"
             autoComplete="new-password"
-            required
             minLength={8}
             value={confirmPassword}
+            isVisible={isConfirmPasswordVisible}
             onChange={(event) => setConfirmPassword(event.target.value)}
-            className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-[#0F172A] outline-none transition focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981]/20"
+            onToggle={() =>
+              setIsConfirmPasswordVisible((visible) => !visible)
+            }
           />
         </div>
       </div>

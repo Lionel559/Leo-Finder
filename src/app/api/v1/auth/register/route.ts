@@ -197,6 +197,22 @@ function logWelcomeEmailResult({
     return;
   }
 
+  if (result.status === "development_blocked") {
+    console.warn("[register] welcome email development blocked", {
+      adminNote: result.adminNote,
+      error: result.error,
+      recipient: result.recipientEmail,
+      reason: result.reason,
+      resendError: result.resendError,
+      resendResponse: result.resendResponse,
+      sender: result.senderEmail,
+      status: result.status,
+      subject: result.subject,
+      userId,
+    });
+    return;
+  }
+
   const logPayload = {
     error: result.error,
     recipient: result.recipientEmail,
@@ -223,18 +239,6 @@ function formatUnknownError(error: unknown) {
   }
 
   return "Unknown welcome email error.";
-}
-
-function getWelcomeEmailDebug(result: WelcomeEmailResult) {
-  if (process.env.NODE_ENV === "production") {
-    return undefined;
-  }
-
-  return {
-    emailAttempted: result.status !== "skipped",
-    emailSent: result.sent,
-    emailError: result.sent ? null : result.error,
-  };
 }
 
 async function readJson(request: Request) {
@@ -480,8 +484,6 @@ export async function POST(request: Request) {
     userId: user.id,
   });
 
-  const emailDebug = getWelcomeEmailDebug(welcomeEmail);
-
   return successResponse(
     "Registration successful",
     {
@@ -496,7 +498,6 @@ export async function POST(request: Request) {
         ...subscription,
         plan: freePlan,
       },
-      ...(emailDebug ? { debug: emailDebug } : {}),
     },
     { status: 201, headers: noStoreHeaders },
   );

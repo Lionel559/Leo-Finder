@@ -15,6 +15,7 @@ type ResendErrorLog = Record<string, unknown> & {
 };
 
 type WelcomeEmailFailureReason =
+  | "development_blocked"
   | "invalid_recipient"
   | "missing_api_key"
   | "provider_error"
@@ -45,8 +46,23 @@ export type WelcomeEmailResult =
     }
   | {
       sent: false;
+      status: "development_blocked";
+      reason: "development_blocked";
+      error: string;
+      adminNote: string;
+      recipientEmail: string;
+      resendError: ResendErrorLog;
+      resendResponse: unknown;
+      senderEmail: string;
+      subject: string;
+    }
+  | {
+      sent: false;
       status: "failed";
-      reason: Exclude<WelcomeEmailFailureReason, "missing_api_key">;
+      reason: Exclude<
+        WelcomeEmailFailureReason,
+        "development_blocked" | "missing_api_key"
+      >;
       error: string;
       recipientEmail: string;
       resendError: ResendErrorLog;
@@ -57,6 +73,11 @@ export type WelcomeEmailResult =
 
 export const defaultWelcomeEmailSender = "Leo Finder <onboarding@resend.dev>";
 export const welcomeEmailSubject = "Welcome to Leo Finder \uD83D\uDE80";
+
+const resendTestingModeMessage =
+  "You can only send testing emails to your own email address";
+const resendDomainVerificationNote =
+  "Verify a domain in Resend to enable production welcome emails.";
 
 let cachedResend: Resend | null = null;
 
@@ -145,6 +166,12 @@ function getErrorMessage(error: ResendErrorLog) {
   return error.message || JSON.stringify(error);
 }
 
+function isResendTestingModeError(error: ResendErrorLog) {
+  return getErrorMessage(error)
+    .toLowerCase()
+    .includes(resendTestingModeMessage.toLowerCase());
+}
+
 function classifyResendError({
   error,
   recipientEmail,
@@ -155,7 +182,10 @@ function classifyResendError({
   senderEmail: string;
 }): {
   message: string;
-  reason: Exclude<WelcomeEmailFailureReason, "missing_api_key">;
+  reason: Exclude<
+    WelcomeEmailFailureReason,
+    "development_blocked" | "missing_api_key"
+  >;
 } {
   const message = getErrorMessage(error);
   const lowerMessage = message.toLowerCase();
@@ -205,6 +235,18 @@ function formatEmailLogError(error: { message?: string } | unknown) {
   }
 
   return formatUnknownError(error);
+}
+
+function getEmailLogErrorMessage(result: WelcomeEmailResult) {
+  if (result.sent) {
+    return null;
+  }
+
+  if (result.status === "development_blocked") {
+    return `${result.error} ${result.adminNote}`;
+  }
+
+  return result.error;
 }
 
 export async function sendWelcomeEmail(
@@ -292,6 +334,36 @@ export async function sendWelcomeEmail(
 
   if (error) {
     const resendError = formatResendError(error);
+
+    if (isResendTestingModeError(resendError)) {
+      const errorMessage = `Resend testing mode blocked welcome email (${recipientEmail}). ${getErrorMessage(resendError)}`;
+
+      console.warn("[welcome-email] Resend development blocked", {
+        adminNote: resendDomainVerificationNote,
+        error: errorMessage,
+        recipient: recipientEmail,
+        resendError,
+        resendErrorRaw: error,
+        resendResponse,
+        sender: senderEmail,
+        status: "development_blocked",
+        subject,
+      });
+
+      return {
+        adminNote: resendDomainVerificationNote,
+        error: errorMessage,
+        recipientEmail,
+        reason: "development_blocked",
+        resendError,
+        resendResponse,
+        senderEmail,
+        sent: false,
+        status: "development_blocked",
+        subject,
+      };
+    }
+
     const classifiedError = classifyResendError({
       error: resendError,
       recipientEmail,
@@ -333,6 +405,53 @@ export async function sendWelcomeEmail(
   };
 }
 
+async function saveWelcomeEmailDevelopmentBlockedAdminLog({
+  admin,
+  result,
+  source,
+  userId,
+}: {
+  admin: ReturnType<typeof createSupabaseAdminClient>;
+  result: Extract<WelcomeEmailResult, { status: "development_blocked" }>;
+  source: string;
+  userId: string | null;
+}) {
+  const adminLog = {
+    user_id: userId,
+    event_type: "welcome_email_development_blocked",
+    severity: "warning",
+    metadata: {
+      error: result.error,
+      note: result.adminNote,
+      provider: "resend",
+      recipient: result.recipientEmail,
+      resendError: result.resendError,
+      sender: result.senderEmail,
+      source,
+      status: result.status,
+      subject: result.subject,
+    },
+  };
+
+  const { error } = await admin.from("security_logs").insert(adminLog);
+
+  if (error) {
+    console.error(`[${source}] admin warning log insert failed`, {
+      adminLog,
+      error,
+    });
+
+    return;
+  }
+
+  console.warn(`[${source}] admin warning log saved`, {
+    note: result.adminNote,
+    recipient: result.recipientEmail,
+    status: result.status,
+    userId,
+  });
+}
+
 export async function saveWelcomeEmailAttemptLog({
   result,
   source = "welcome-email",
@@ -349,7 +468,7 @@ export async function saveWelcomeEmailAttemptLog({
     subject: result.subject,
     status: result.status,
     provider_message_id: result.sent ? result.id : null,
-    error_message: result.sent ? null : result.error,
+    error_message: getEmailLogErrorMessage(result),
     sent_at: result.sent ? new Date().toISOString() : null,
   };
 
@@ -365,6 +484,15 @@ export async function saveWelcomeEmailAttemptLog({
   try {
     const admin = createSupabaseAdminClient();
     const { error } = await admin.from("email_logs").insert(emailLog);
+
+    if (result.status === "development_blocked") {
+      await saveWelcomeEmailDevelopmentBlockedAdminLog({
+        admin,
+        result,
+        source,
+        userId,
+      });
+    }
 
     if (error) {
       console.error(`[${source}] email_logs insert failed`, {

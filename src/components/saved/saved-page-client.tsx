@@ -12,6 +12,28 @@ type SavedResponse = {
   total: number;
 };
 
+type RecommendationsResponse = {
+  opportunities: Opportunity[];
+  total: number;
+};
+
+function mergeMatches(
+  opportunities: Opportunity[],
+  recommendations: Opportunity[],
+) {
+  const recommendationById = new Map(
+    recommendations.map((opportunity) => [opportunity.id, opportunity]),
+  );
+
+  return opportunities.map((opportunity) => ({
+    ...opportunity,
+    match: recommendationById.get(opportunity.id)?.match ?? opportunity.match,
+    matchScore:
+      recommendationById.get(opportunity.id)?.matchScore ??
+      opportunity.matchScore,
+  }));
+}
+
 export function SavedPageClient() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,9 +48,28 @@ export function SavedPageClient() {
 
       try {
         const data = await fetchApi<SavedResponse>("/api/v1/saved");
+        let nextOpportunities = data.opportunities;
+
+        try {
+          const recommendations = await fetchApi<RecommendationsResponse>(
+            "/api/v1/recommendations?limit=50",
+          );
+
+          nextOpportunities = mergeMatches(
+            nextOpportunities,
+            recommendations.opportunities,
+          );
+        } catch (recommendationError) {
+          console.warn("[saved] recommendations enrichment skipped", {
+            error:
+              recommendationError instanceof Error
+                ? recommendationError.message
+                : String(recommendationError),
+          });
+        }
 
         if (isMounted) {
-          setOpportunities(data.opportunities);
+          setOpportunities(nextOpportunities);
         }
       } catch (caughtError) {
         if (isMounted) {

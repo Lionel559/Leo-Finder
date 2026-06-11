@@ -11,6 +11,11 @@ type DashboardClientProps = {
   fallbackName: string;
 };
 
+type RecommendationsResponse = {
+  opportunities: DashboardData["recommendedOpportunities"];
+  total: number;
+};
+
 function formatFileSize(bytes: number | null) {
   if (!bytes) {
     return "";
@@ -56,9 +61,28 @@ export function DashboardClient({ fallbackName }: DashboardClientProps) {
 
       try {
         const dashboard = await fetchApi<DashboardData>("/api/v1/dashboard");
+        let recommendedOpportunities = dashboard.recommendedOpportunities;
+
+        try {
+          const recommendations = await fetchApi<RecommendationsResponse>(
+            "/api/v1/recommendations?limit=4",
+          );
+
+          recommendedOpportunities = recommendations.opportunities;
+        } catch (recommendationError) {
+          console.warn("[dashboard] recommendations endpoint skipped", {
+            error:
+              recommendationError instanceof Error
+                ? recommendationError.message
+                : String(recommendationError),
+          });
+        }
 
         if (isMounted) {
-          setData(dashboard);
+          setData({
+            ...dashboard,
+            recommendedOpportunities,
+          });
         }
       } catch (caughtError) {
         if (isMounted) {

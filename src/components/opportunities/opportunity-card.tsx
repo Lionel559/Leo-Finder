@@ -41,6 +41,8 @@ export function OpportunityCard({
   const [isSaved, setIsSaved] = useState(opportunity.isSaved);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const match = opportunity.match;
+  const matchScore = match?.overallScore ?? opportunity.matchScore;
 
   async function toggleSave() {
     setIsSaving(true);
@@ -83,7 +85,7 @@ export function OpportunityCard({
           </p>
         </div>
         <span className="w-fit rounded-md bg-[#0EA5E9]/10 px-3 py-1 text-sm font-semibold text-[#0369A1]">
-          {opportunity.matchScore}% match
+          {matchScore}% match
         </span>
       </div>
 
@@ -124,6 +126,31 @@ export function OpportunityCard({
           </span>
         ))}
       </div>
+
+      {match ? (
+        <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Why it matches
+            </p>
+            <ul className="mt-2 space-y-1 text-sm leading-5 text-slate-600">
+              {match.reasons.slice(0, 2).map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </div>
+          {match.missingSkills.length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Missing skills
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                {match.missingSkills.slice(0, 4).join(", ")}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {error ? (
         <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

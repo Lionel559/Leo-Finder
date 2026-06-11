@@ -228,7 +228,7 @@ export function OpportunityDetailClient({
             </p>
           </div>
           <span className="w-fit rounded-md bg-[#0EA5E9]/10 px-3 py-1 text-sm font-semibold text-[#0369A1]">
-            {opportunity.matchScore}% match
+            {opportunity.match?.overallScore ?? opportunity.matchScore}% match
           </span>
         </div>
 
@@ -263,6 +263,73 @@ export function OpportunityDetailClient({
             )}
           </div>
         </section>
+
+        {opportunity.match ? (
+          <details className="mt-7 rounded-md border border-slate-200 bg-[#F8FAFC] p-4">
+            <summary className="cursor-pointer text-lg font-semibold text-[#0F172A]">
+              Why this match?
+            </summary>
+            <div className="mt-4 space-y-5">
+              <div className="grid gap-3 sm:grid-cols-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Skills
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-[#0F172A]">
+                    {opportunity.match.skillMatchScore}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Preferences
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-[#0F172A]">
+                    {opportunity.match.preferenceMatchScore}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Resume
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-[#0F172A]">
+                    {opportunity.match.experienceMatchScore}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Memory
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-[#0F172A]">
+                    {opportunity.match.historyMatchScore}%
+                  </p>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#0F172A]">
+                  Reasons
+                </p>
+                <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-600">
+                  {opportunity.match.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#0F172A]">
+                  Missing skills
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {opportunity.match.missingSkills.length > 0
+                    ? opportunity.match.missingSkills.join(", ")
+                    : "No major missing skills detected."}
+                </p>
+              </div>
+              <p className="rounded-md border border-[#10B981]/20 bg-white px-3 py-2 text-sm font-medium leading-6 text-[#0F172A]">
+                {opportunity.match.recommendation}
+              </p>
+            </div>
+          </details>
+        ) : null}
       </article>
 
       <aside className="space-y-4">

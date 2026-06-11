@@ -184,6 +184,7 @@ export function formatOpportunity(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     matchScore: calculateMatchScore(row, context),
+    match: null,
     isSaved: context?.savedOpportunityIds.has(row.id) ?? false,
     application: getApplicationState(context, row.id),
   };

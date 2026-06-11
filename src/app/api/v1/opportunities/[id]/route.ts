@@ -1,6 +1,11 @@
 import { errorResponse, successResponse } from "@/lib/api";
 import { AuthError } from "@/lib/auth";
 import {
+  applyMatchToOpportunity,
+  loadMatchingProfile,
+  scoreOpportunityMatch,
+} from "@/lib/matching/server";
+import {
   filterPublishedRows,
   formatOpportunity,
   getOpportunityViewerContext,
@@ -50,9 +55,21 @@ export async function GET(
       );
     }
 
+    const matchingProfile = await loadMatchingProfile(
+      supabase,
+      viewerContext.user.id,
+    );
+    const match = await scoreOpportunityMatch(matchingProfile, rows[0], {
+      saveHistory: true,
+    });
+    const opportunity = applyMatchToOpportunity(
+      formatOpportunity(rows[0], viewerContext),
+      match,
+    );
+
     return successResponse(
       "Opportunity loaded",
-      { opportunity: formatOpportunity(rows[0], viewerContext) },
+      { opportunity },
       { headers: noStoreHeaders },
     );
   } catch (error) {

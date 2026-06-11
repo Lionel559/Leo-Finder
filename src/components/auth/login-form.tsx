@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
+import { PasswordInput } from "@/components/auth/password-input";
 import type { ApiResponse } from "@/types";
 
 type LoginResponse = {
@@ -37,6 +38,7 @@ export function LoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -92,15 +94,14 @@ export function LoginForm() {
             Forgot password?
           </button>
         </div>
-        <input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="current-password"
-          required
           value={password}
+          isVisible={isPasswordVisible}
           onChange={(event) => setPassword(event.target.value)}
-          className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-[#0F172A] outline-none transition focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981]/20"
+          onToggle={() => setIsPasswordVisible((visible) => !visible)}
         />
       </div>
 

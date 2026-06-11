@@ -45,7 +45,11 @@ function getLimit(value: string | null) {
 }
 
 function getSort(value: string | null): OpportunitySort {
-  return value === "deadline" ? "deadline" : "newest";
+  if (value === "deadline" || value === "salary_prize_amount") {
+    return value;
+  }
+
+  return "newest";
 }
 
 function includesKeyword(row: DbOpportunity, keyword: string) {
@@ -77,6 +81,22 @@ function includesSkills(row: DbOpportunity, skills: string[]) {
   return skills.some((skill) => rowSkills.has(skill));
 }
 
+function getSalaryPrizeSortValue(value: string | null) {
+  if (!value) {
+    return 0;
+  }
+
+  const match = value.match(/[\d,.]+/);
+
+  if (!match) {
+    return 0;
+  }
+
+  const parsed = Number(match[0].replace(/,/g, ""));
+
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function sortRows(rows: DbOpportunity[], sort: OpportunitySort) {
   return [...rows].sort((a, b) => {
     if (sort === "deadline") {
@@ -84,6 +104,13 @@ function sortRows(rows: DbOpportunity[], sort: OpportunitySort) {
       const bTime = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER;
 
       return aTime - bTime;
+    }
+
+    if (sort === "salary_prize_amount") {
+      return (
+        getSalaryPrizeSortValue(b.salary_prize_amount) -
+        getSalaryPrizeSortValue(a.salary_prize_amount)
+      );
     }
 
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -98,7 +125,9 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const keyword = (url.searchParams.get("q") ?? "").trim().toLowerCase();
     const category = url.searchParams.get("category");
-    const remoteStatus = url.searchParams.get("remoteStatus");
+    const remoteStatus =
+      url.searchParams.get("remote_status") ??
+      url.searchParams.get("remoteStatus");
     const location = (url.searchParams.get("location") ?? "").trim().toLowerCase();
     const skills = getListParam(url.searchParams.get("skills"));
     const sort = getSort(url.searchParams.get("sort"));
