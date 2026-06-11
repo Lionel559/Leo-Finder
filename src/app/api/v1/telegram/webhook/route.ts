@@ -1,6 +1,7 @@
 import { errorResponse, successResponse } from "@/lib/api";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getTelegramBotToken } from "@/lib/telegram/config";
+import { sendTelegramMessage } from "@/lib/telegram/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -69,85 +70,6 @@ function parseTelegramText(text: string | undefined) {
     connectionCode: null,
     isStartCommand: false,
   };
-}
-
-async function sendTelegramMessage(
-  chatId: string,
-  text: string,
-  token = getTelegramBotToken(),
-) {
-  if (!token) {
-    const error = "TELEGRAM_BOT_TOKEN is missing.";
-    console.error("[telegram webhook] sendMessage failed", {
-      chatId,
-      error,
-    });
-    return {
-      error,
-      response: null,
-      sent: false,
-    };
-  }
-
-  try {
-    const response = await fetch(
-      `https://api.telegram.org/bot${token}/sendMessage`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text,
-        }),
-      },
-    );
-    const responseBody = await response.json().catch(() => null);
-
-    if (!response.ok || responseBody?.ok === false) {
-      const error =
-        responseBody?.description ??
-        `Telegram sendMessage failed with status ${response.status}.`;
-      console.error("[telegram webhook] sendMessage failed", {
-        chatId,
-        error,
-        response: responseBody,
-      });
-
-      return {
-        error,
-        response: responseBody,
-        sent: false,
-      };
-    }
-
-    console.info("[telegram webhook] sendMessage sent", {
-      chatId,
-      response: responseBody,
-    });
-
-    return {
-      error: null,
-      response: responseBody,
-      sent: true,
-    };
-  } catch (caughtError) {
-    const error =
-      caughtError instanceof Error
-        ? caughtError.message
-        : "Telegram sendMessage failed.";
-    console.error("[telegram webhook] sendMessage failed", {
-      chatId,
-      error,
-    });
-
-    return {
-      error,
-      response: null,
-      sent: false,
-    };
-  }
 }
 
 async function readJson(request: Request): Promise<TelegramWebhookUpdate | null> {
@@ -298,6 +220,7 @@ export async function POST(request: Request) {
       {
         user_id: pendingAttempt.user_id,
         telegram_user_id: telegramUserId,
+        telegram_username: telegramUsername,
         chat_id: chatId,
         username: telegramUsername,
         status: "active",
@@ -305,7 +228,9 @@ export async function POST(request: Request) {
       },
       { onConflict: "user_id" },
     )
-    .select("id,user_id,telegram_user_id,chat_id,username,status,connected_at")
+    .select(
+      "id,user_id,telegram_user_id,telegram_username,chat_id,username,status,connected_at",
+    )
     .single();
 
   if (connectionError) {

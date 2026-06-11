@@ -36,7 +36,9 @@ export async function POST() {
 
     const { data: connection, error: connectionError } = await admin
       .from("telegram_connections")
-      .select("id,status,username,connected_at")
+      .select(
+        "id,status,telegram_user_id,telegram_username,username,connected_at",
+      )
       .eq("user_id", user.id)
       .eq("status", "active")
       .maybeSingle();
@@ -57,6 +59,9 @@ export async function POST() {
           status: "connected",
           connection: {
             id: connection.id,
+            telegramUserId: connection.telegram_user_id,
+            telegramUsername:
+              connection.telegram_username ?? connection.username,
             username: connection.username,
             connectedAt: connection.connected_at,
           },

@@ -18,6 +18,8 @@ const noStoreHeaders = {
 type TelegramConnection = {
   id: string;
   status: "active" | "disabled" | "revoked";
+  telegram_user_id: string | null;
+  telegram_username: string | null;
   username: string | null;
   chat_id: string;
   connected_at: string;
@@ -49,7 +51,9 @@ export async function GET() {
 
     const { data: connection, error: connectionError } = await admin
       .from("telegram_connections")
-      .select("id,status,username,chat_id,connected_at,updated_at")
+      .select(
+        "id,status,telegram_user_id,telegram_username,username,chat_id,connected_at,updated_at",
+      )
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -106,6 +110,10 @@ export async function GET() {
           activeConnection?.status === "active"
             ? {
                 id: activeConnection.id,
+                telegramUserId: activeConnection.telegram_user_id,
+                telegramUsername:
+                  activeConnection.telegram_username ??
+                  activeConnection.username,
                 username: activeConnection.username,
                 connectedAt: activeConnection.connected_at,
               }

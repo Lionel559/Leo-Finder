@@ -17,6 +17,8 @@ type TelegramAttempt = {
 
 type TelegramConnection = {
   id: string;
+  telegramUserId: string | null;
+  telegramUsername: string | null;
   username: string | null;
   connectedAt: string;
 };
@@ -25,6 +27,11 @@ type TelegramStatusResponse = {
   status: TelegramStatus;
   connection: TelegramConnection | null;
   attempt: TelegramAttempt | null;
+};
+
+type TelegramTestAlertResponse = {
+  sent: boolean;
+  connection: TelegramConnection;
 };
 
 type TelegramConnectionCardProps = {
@@ -51,11 +58,11 @@ function getQrCodeUrl(value: string) {
 
 function getStatusLabel(status: TelegramStatus) {
   if (status === "connected") {
-    return "Connected";
+    return "Connected \u2705";
   }
 
   if (status === "pending") {
-    return "Pending connection";
+    return "Waiting for Telegram";
   }
 
   return "Not connected";
@@ -71,6 +78,19 @@ async function requestTelegram(
 
   if (!response.ok || !body.success) {
     throw new Error(body.message || "Telegram connection could not be updated.");
+  }
+
+  return body.data;
+}
+
+async function sendTestTelegramAlert() {
+  const response = await fetch("/api/v1/telegram/test-alert", {
+    method: "POST",
+  });
+  const body = (await response.json()) as ApiResponse<TelegramTestAlertResponse>;
+
+  if (!response.ok || !body.success) {
+    throw new Error(body.message || "Telegram test alert could not be sent.");
   }
 
   return body.data;
@@ -101,7 +121,9 @@ export function TelegramConnectionCard({
   const [attempt, setAttempt] = useState<TelegramAttempt | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const applyStatusData = useCallback((data: TelegramStatusResponse) => {
     setStatus(data.status);
@@ -144,6 +166,7 @@ export function TelegramConnectionCard({
   async function handleConnect() {
     setIsSubmitting(true);
     setError(null);
+    setNotice(null);
 
     try {
       const data = await requestTelegram("/api/v1/telegram/connect");
@@ -165,6 +188,7 @@ export function TelegramConnectionCard({
   async function handleDisconnect() {
     setIsSubmitting(true);
     setError(null);
+    setNotice(null);
 
     try {
       const data = await requestTelegram("/api/v1/telegram/disconnect");
@@ -183,7 +207,36 @@ export function TelegramConnectionCard({
     }
   }
 
+  async function handleSendTestAlert() {
+    setIsTesting(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const data = await sendTestTelegramAlert();
+
+      if (data?.connection) {
+        setConnection(data.connection);
+      }
+
+      setNotice("Test alert sent to Telegram.");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Telegram test alert could not be sent.",
+      );
+    } finally {
+      setIsTesting(false);
+    }
+  }
+
   const statusLabel = isLoading ? "Checking..." : getStatusLabel(status);
+  const telegramUsername =
+    connection?.telegramUsername ?? connection?.username ?? null;
+  const connectedDateLabel = connection?.connectedAt
+    ? new Date(connection.connectedAt).toLocaleString()
+    : "Unavailable";
 
   return (
     <section
@@ -192,7 +245,7 @@ export function TelegramConnectionCard({
       }`}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-semibold uppercase tracking-wide text-[#10B981]">
             Telegram
           </p>
@@ -202,37 +255,68 @@ export function TelegramConnectionCard({
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Status: <span className="font-semibold">{statusLabel}</span>
           </p>
-          {status !== "connected" ? (
+          {status === "connected" ? (
+            <div className="mt-4 rounded-md border border-[#10B981]/20 bg-[#10B981]/5 p-4">
+              <p className="text-sm font-semibold text-[#0F172A]">
+                Connected to Telegram
+              </p>
+              <dl className="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
+                <div>
+                  <dt className="font-medium text-slate-500">
+                    Telegram username
+                  </dt>
+                  <dd className="mt-1 break-all font-semibold text-[#0F172A]">
+                    {telegramUsername ? `@${telegramUsername}` : "Unavailable"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-slate-500">
+                    Connected date
+                  </dt>
+                  <dd className="mt-1 font-semibold text-[#0F172A]">
+                    {connectedDateLabel}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          ) : (
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Click Connect Telegram and press Start in the bot to receive
               opportunity alerts.
             </p>
-          ) : null}
-          {connection?.username ? (
-            <p className="mt-1 text-sm text-slate-600">
-              Connected as @{connection.username}
-            </p>
-          ) : null}
-          {connection?.connectedAt ? (
-            <p className="mt-1 text-sm text-slate-600">
-              Connected {new Date(connection.connectedAt).toLocaleString()}
-            </p>
-          ) : null}
+          )}
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
           <button
             type="button"
             onClick={handleConnect}
-            disabled={isLoading || isSubmitting || status === "connected"}
+            disabled={
+              isLoading || isSubmitting || isTesting || status === "connected"
+            }
             className="h-10 rounded-md bg-[#10B981] px-4 text-sm font-semibold text-white transition hover:bg-[#059669] disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             Connect Telegram
           </button>
           <button
             type="button"
+            onClick={handleSendTestAlert}
+            disabled={
+              isLoading || isSubmitting || isTesting || status !== "connected"
+            }
+            className="h-10 rounded-md border border-[#10B981]/40 bg-[#ECFDF5] px-4 text-sm font-semibold text-[#047857] transition hover:border-[#10B981] hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+          >
+            {isTesting ? "Sending..." : "Send Test Alert"}
+          </button>
+          <button
+            type="button"
             onClick={handleDisconnect}
-            disabled={isLoading || isSubmitting || status === "not_connected"}
+            disabled={
+              isLoading ||
+              isSubmitting ||
+              isTesting ||
+              status === "not_connected"
+            }
             className="h-10 rounded-md border border-slate-200 px-4 text-sm font-semibold text-[#0F172A] transition hover:border-[#10B981]/50 hover:bg-[#F8FAFC] disabled:cursor-not-allowed disabled:text-slate-400"
           >
             Disconnect
@@ -240,7 +324,7 @@ export function TelegramConnectionCard({
         </div>
       </div>
 
-      {attempt ? (
+      {status !== "connected" && attempt ? (
         <div className="mt-4 rounded-md border border-[#10B981]/20 bg-[#10B981]/5 p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
@@ -289,6 +373,12 @@ export function TelegramConnectionCard({
       {error ? (
         <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
+        </p>
+      ) : null}
+
+      {notice ? (
+        <p className="mt-4 rounded-md border border-[#10B981]/20 bg-[#ECFDF5] px-3 py-2 text-sm font-medium text-[#047857]">
+          {notice}
         </p>
       ) : null}
     </section>
