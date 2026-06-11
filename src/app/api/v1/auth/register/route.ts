@@ -166,9 +166,9 @@ function logWelcomeEmailStarted({
   senderEmail: string;
   userId: string;
 }) {
-  console.info("[register] email started", {
-    recipientEmail,
-    senderEmail,
+  console.info("[register] welcome email started", {
+    recipient: recipientEmail,
+    sender: senderEmail,
     status: "started",
     subject: welcomeEmailSubject,
     userId,
@@ -183,12 +183,12 @@ function logWelcomeEmailResult({
   userId: string;
 }) {
   if (result.sent) {
-    console.info("[register] email sent", {
-      recipientEmail: result.recipientEmail,
+    console.info("[register] welcome email sent", {
       providerMessageId: result.id,
+      recipient: result.recipientEmail,
       resendError: result.resendError,
       resendResponse: result.resendResponse,
-      senderEmail: result.senderEmail,
+      sender: result.senderEmail,
       status: "sent",
       subject: result.subject,
       userId,
@@ -198,11 +198,11 @@ function logWelcomeEmailResult({
 
   const logPayload = {
     error: result.error,
-    recipientEmail: result.recipientEmail,
+    recipient: result.recipientEmail,
     reason: result.reason,
     resendError: result.resendError,
     resendResponse: result.resendResponse,
-    senderEmail: result.senderEmail,
+    sender: result.senderEmail,
     status: result.status,
     subject: result.subject,
     userId,
@@ -255,6 +255,15 @@ async function saveWelcomeEmailLog({
     error_message: result.sent ? null : result.error,
     sent_at: result.sent ? new Date().toISOString() : null,
   };
+
+  console.info("[register] welcome email log attempt", {
+    email_to: emailLog.email_to,
+    provider_message_id: emailLog.provider_message_id,
+    status: emailLog.status,
+    subject: emailLog.subject,
+    template: emailLog.template,
+    userId,
+  });
 
   try {
     const { error } = await admin.from("email_logs").insert(emailLog);
@@ -522,6 +531,8 @@ export async function POST(request: Request) {
     userId: user.id,
   });
 
+  const emailDebug = getWelcomeEmailDebug(welcomeEmail);
+
   return successResponse(
     "Registration successful",
     {
@@ -536,8 +547,7 @@ export async function POST(request: Request) {
         ...subscription,
         plan: freePlan,
       },
-      welcomeEmail,
-      debug: getWelcomeEmailDebug(welcomeEmail),
+      ...(emailDebug ? { debug: emailDebug } : {}),
     },
     { status: 201, headers: noStoreHeaders },
   );

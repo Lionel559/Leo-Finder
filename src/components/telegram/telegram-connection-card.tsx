@@ -163,6 +163,25 @@ export function TelegramConnectionCard({
     };
   }, [applyStatusData]);
 
+  useEffect(() => {
+    if (status !== "pending") {
+      return;
+    }
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const data = await fetchTelegramStatus();
+        applyStatusData(data);
+      } catch {
+        // Keep the current pending state; the visible error area is reserved for user actions.
+      }
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [applyStatusData, status]);
+
   async function handleConnect() {
     setIsSubmitting(true);
     setError(null);

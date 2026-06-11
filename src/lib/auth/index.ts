@@ -29,6 +29,21 @@ export type AdminUser = {
   updated_at: string;
 };
 
+export type CoreOnboardingStatus = {
+  completed: boolean;
+  profile: UserProfile | null;
+  preferences: {
+    preferredCategories: string[];
+    preferredLocations: string[];
+    preferredRemoteStatuses: string[];
+    preferredSkills: string[];
+  };
+  resumeUpload: {
+    fileName: string | null;
+    fileSizeBytes: number | null;
+  } | null;
+};
+
 export class AuthError extends Error {
   constructor(
     message: string,
@@ -76,6 +91,111 @@ export async function getUserProfile(
   return data as UserProfile | null;
 }
 
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+export async function getCoreOnboardingStatus(
+  userId: string,
+  supabase?: SupabaseClient,
+): Promise<CoreOnboardingStatus> {
+  const client = supabase ?? (await createSupabaseServerClient());
+  const [
+    profileResult,
+    preferencesResult,
+    resumeResult,
+    userSkillsResult,
+  ] = await Promise.all([
+    client
+      .from("profiles")
+      .select(
+        "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
+      )
+      .eq("id", userId)
+      .maybeSingle(),
+    client
+      .from("user_preferences")
+      .select(
+        "preferred_categories,preferred_locations,preferred_remote_statuses,preferred_skills",
+      )
+      .eq("user_id", userId)
+      .maybeSingle(),
+    client
+      .from("resume_uploads")
+      .select("file_name,file_size_bytes")
+      .eq("user_id", userId)
+      .eq("is_current", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    client
+      .from("user_skills")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId),
+  ]);
+
+  if (profileResult.error) {
+    throw profileResult.error;
+  }
+
+  if (preferencesResult.error) {
+    throw preferencesResult.error;
+  }
+
+  if (resumeResult.error) {
+    throw resumeResult.error;
+  }
+
+  if (userSkillsResult.error) {
+    throw userSkillsResult.error;
+  }
+
+  const profile = profileResult.data as UserProfile | null;
+  const preferencesRow = preferencesResult.data;
+  const preferences = {
+    preferredCategories: toStringArray(preferencesRow?.preferred_categories),
+    preferredLocations: toStringArray(preferencesRow?.preferred_locations),
+    preferredRemoteStatuses: toStringArray(
+      preferencesRow?.preferred_remote_statuses,
+    ),
+    preferredSkills: toStringArray(preferencesRow?.preferred_skills),
+  };
+  const resumeUpload = resumeResult.data
+    ? {
+        fileName:
+          typeof resumeResult.data.file_name === "string"
+            ? resumeResult.data.file_name
+            : null,
+        fileSizeBytes:
+          typeof resumeResult.data.file_size_bytes === "number"
+            ? resumeResult.data.file_size_bytes
+            : typeof resumeResult.data.file_size_bytes === "string"
+              ? Number(resumeResult.data.file_size_bytes)
+              : null,
+      }
+    : null;
+  const completed =
+    Boolean(profile) &&
+    (profile?.preferred_roles?.length ?? 0) > 0 &&
+    Boolean(profile?.experience_level) &&
+    Boolean(profile?.location) &&
+    preferences.preferredCategories.length > 0 &&
+    preferences.preferredLocations.length > 0 &&
+    preferences.preferredRemoteStatuses.length > 0 &&
+    preferences.preferredSkills.length > 0 &&
+    Boolean(resumeUpload) &&
+    (userSkillsResult.count ?? 0) > 0;
+
+  return {
+    completed,
+    profile,
+    preferences,
+    resumeUpload,
+  };
+}
+
 export async function requireAuth(supabase?: SupabaseClient): Promise<User> {
   const user = await getCurrentUser(supabase);
 
@@ -89,9 +209,10 @@ export async function requireAuth(supabase?: SupabaseClient): Promise<User> {
 export async function requireCompletedOnboarding(supabase?: SupabaseClient) {
   const client = supabase ?? (await createSupabaseServerClient());
   const user = await requireAuth(client);
-  const profile = await getUserProfile(user.id, client);
+  const coreOnboarding = await getCoreOnboardingStatus(user.id, client);
+  const profile = coreOnboarding.profile;
 
-  if (!profile?.onboarding_completed) {
+  if (!profile || (!profile.onboarding_completed && !coreOnboarding.completed)) {
     throw new AuthError(
       "Complete onboarding before accessing this feature.",
       403,
@@ -100,6 +221,7 @@ export async function requireCompletedOnboarding(supabase?: SupabaseClient) {
   }
 
   return {
+    coreOnboarding,
     user,
     profile,
   };

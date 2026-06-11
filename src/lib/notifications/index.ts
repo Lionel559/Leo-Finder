@@ -59,6 +59,13 @@ function getResendApiKey() {
     source: "process.env.RESEND_API_KEY",
   });
 
+  if (!apiKey) {
+    console.error("[welcome-email] RESEND_API_KEY is missing", {
+      loaded: false,
+      source: "process.env.RESEND_API_KEY",
+    });
+  }
+
   return apiKey;
 }
 
@@ -75,11 +82,7 @@ function getResendClient() {
 }
 
 export function getWelcomeEmailSender() {
-  if (process.env.NODE_ENV !== "production") {
-    return defaultWelcomeEmailSender;
-  }
-
-  return process.env.RESEND_FROM_EMAIL?.trim() || defaultWelcomeEmailSender;
+  return defaultWelcomeEmailSender;
 }
 
 function escapeHtml(value: string) {
@@ -138,15 +141,18 @@ export async function sendWelcomeEmail(
   const subject = welcomeEmailSubject;
 
   if (!resend) {
-    console.info("[welcome-email] Resend send skipped", {
-      recipientEmail,
+    const error = "RESEND_API_KEY is missing; welcome email skipped.";
+
+    console.error("[welcome-email] Resend error", {
+      error,
+      recipient: recipientEmail,
       reason: "missing_api_key",
-      senderEmail,
+      sender: senderEmail,
       subject,
     });
 
     return {
-      error: "RESEND_API_KEY is missing; welcome email skipped.",
+      error,
       recipientEmail,
       reason: "missing_api_key",
       resendError: null,
@@ -202,9 +208,9 @@ export async function sendWelcomeEmail(
     }));
 
   console.info("[welcome-email] Resend response", {
-    recipientEmail,
+    recipient: recipientEmail,
     resendResponse: data,
-    senderEmail,
+    sender: senderEmail,
     subject,
   });
 
@@ -212,10 +218,10 @@ export async function sendWelcomeEmail(
     const resendError = formatResendError(error);
 
     console.error("[welcome-email] Resend error", {
-      recipientEmail,
+      recipient: recipientEmail,
       resendError,
       resendErrorRaw: error,
-      senderEmail,
+      sender: senderEmail,
       subject,
     });
 

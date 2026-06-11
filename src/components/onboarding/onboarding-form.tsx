@@ -24,8 +24,8 @@ const steps = [
     navLabel: "Preferences",
   },
   {
-    title: "Completion",
-    navLabel: "Complete",
+    title: "Telegram Alerts",
+    navLabel: "Telegram",
   },
 ] as const;
 
@@ -93,6 +93,19 @@ type OpportunityType = (typeof opportunityTypes)[number]["value"];
 
 type OnboardingFormProps = {
   initialName: string;
+  initialOnboarding?: {
+    coreCompleted: boolean;
+    experienceLevel: string | null;
+    preferredLocations: string[];
+    preferredOpportunityTypes: string[];
+    preferredRoles: string[];
+    remotePreference: string | null;
+    resumeUpload: {
+      fileName: string | null;
+      fileSizeBytes: number | null;
+    } | null;
+    skills: string[];
+  };
 };
 
 type OnboardingResponse = {
@@ -100,6 +113,12 @@ type OnboardingResponse = {
     id: string;
     file_name: string;
     file_size?: number;
+  };
+};
+
+type CompleteOnboardingResponse = {
+  profile?: {
+    onboarding_completed?: boolean;
   };
 };
 
@@ -131,8 +150,12 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function getFileError(file: File | null) {
+function getFileError(file: File | null, hasSavedResume = false) {
   if (!file) {
+    if (hasSavedResume) {
+      return null;
+    }
+
     return "Upload a PDF or DOCX resume.";
   }
 
@@ -164,27 +187,80 @@ function getSelectedLabels<TValue extends string>(
     .map((option) => option.label);
 }
 
-export function OnboardingForm({ initialName }: OnboardingFormProps) {
+async function completeOnboarding() {
+  const response = await fetch("/api/v1/onboarding/complete", {
+    method: "POST",
+  });
+  const body = (await response.json()) as ApiResponse<CompleteOnboardingResponse>;
+
+  if (!response.ok || !body.success) {
+    throw new Error(body.message || "Onboarding could not be completed.");
+  }
+
+  return body.data;
+}
+
+function isExperienceLevel(value: string | null): value is ExperienceLevel {
+  return experienceLevels.some((level) => level.value === value);
+}
+
+function isRemotePreference(value: string | null): value is RemotePreference {
+  return remotePreferenceOptions.some((option) => option.value === value);
+}
+
+function getOpportunityTypes(values: string[]) {
+  return values.filter((value): value is OpportunityType =>
+    opportunityTypes.some((option) => option.value === value),
+  );
+}
+
+export function OnboardingForm({
+  initialName,
+  initialOnboarding,
+}: OnboardingFormProps) {
   const router = useRouter();
-  const [step, setStep] = useState(0);
-  const [highestStep, setHighestStep] = useState(0);
-  const [preferredRoles, setPreferredRoles] = useState<string[]>([]);
+  const initialStep = initialOnboarding?.coreCompleted ? 4 : 0;
+  const rawInitialExperienceLevel = initialOnboarding?.experienceLevel ?? null;
+  const rawInitialRemotePreference = initialOnboarding?.remotePreference ?? null;
+  const initialExperienceLevel = isExperienceLevel(rawInitialExperienceLevel)
+    ? rawInitialExperienceLevel
+    : "beginner";
+  const initialRemotePreference = isRemotePreference(
+    rawInitialRemotePreference,
+  )
+    ? rawInitialRemotePreference
+    : null;
+  const [step, setStep] = useState(initialStep);
+  const [highestStep, setHighestStep] = useState(initialStep);
+  const [preferredRoles, setPreferredRoles] = useState<string[]>(
+    initialOnboarding?.preferredRoles ?? [],
+  );
   const [customRole, setCustomRole] = useState("");
   const [experienceLevel, setExperienceLevel] =
-    useState<ExperienceLevel>("beginner");
-  const [preferredLocations, setPreferredLocations] = useState<string[]>([]);
+    useState<ExperienceLevel>(initialExperienceLevel);
+  const [preferredLocations, setPreferredLocations] = useState<string[]>(
+    initialOnboarding?.preferredLocations ?? [],
+  );
   const [customLocation, setCustomLocation] = useState("");
   const [remotePreference, setRemotePreference] =
-    useState<RemotePreference | null>(null);
-  const [skills, setSkills] = useState<string[]>([]);
+    useState<RemotePreference | null>(initialRemotePreference);
+  const [skills, setSkills] = useState<string[]>(
+    initialOnboarding?.skills ?? [],
+  );
   const [customSkill, setCustomSkill] = useState("");
   const [resume, setResume] = useState<File | null>(null);
   const [preferredOpportunityTypes, setPreferredOpportunityTypes] = useState<
     OpportunityType[]
-  >([]);
-  const [savedResumeName, setSavedResumeName] = useState<string | null>(null);
-  const [savedResumeSize, setSavedResumeSize] = useState<number | null>(null);
-  const [isComplete, setIsComplete] = useState(false);
+  >(getOpportunityTypes(initialOnboarding?.preferredOpportunityTypes ?? []));
+  const [savedResumeName, setSavedResumeName] = useState<string | null>(
+    initialOnboarding?.resumeUpload?.fileName ?? null,
+  );
+  const [savedResumeSize, setSavedResumeSize] = useState<number | null>(
+    initialOnboarding?.resumeUpload?.fileSizeBytes ?? null,
+  );
+  const [isComplete, setIsComplete] = useState(
+    Boolean(initialOnboarding?.coreCompleted),
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -220,7 +296,7 @@ export function OnboardingForm({ initialName }: OnboardingFormProps) {
     }
 
     if (currentStep === 2) {
-      return getFileError(resume);
+      return getFileError(resume, Boolean(savedResumeName));
     }
 
     if (currentStep === 3 && preferredOpportunityTypes.length === 0) {
@@ -338,9 +414,28 @@ export function OnboardingForm({ initialName }: OnboardingFormProps) {
     }
   }
 
-  function goToDashboard() {
-    router.replace("/dashboard");
-    router.refresh();
+  async function completeAndGoToDashboard() {
+    if (!isComplete) {
+      setError("Save the required onboarding steps before opening dashboard.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await completeOnboarding();
+      router.replace("/dashboard");
+      router.refresh();
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Onboarding could not be completed.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -675,14 +770,14 @@ export function OnboardingForm({ initialName }: OnboardingFormProps) {
           <div className="space-y-6">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-[#10B981]">
-                Setup complete
+                Optional alerts
               </p>
               <h3 className="mt-2 text-3xl font-semibold text-[#0F172A]">
-                Your Opportunity Agent is Ready
+                Connect Telegram for faster alerts
               </h3>
               <p className="mt-3 text-sm leading-6 text-slate-600">
-                Leo Finder now has enough context to power matching,
-                recommendations, resume analysis, and future alerts.
+                Connect Telegram to receive opportunity alerts, or skip this
+                step and connect later from settings.
               </p>
             </div>
 
@@ -743,14 +838,24 @@ export function OnboardingForm({ initialName }: OnboardingFormProps) {
 
       <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
         {step === 4 ? (
-          <button
-            type="button"
-            onClick={goToDashboard}
-            disabled={!isComplete}
-            className="h-11 rounded-md bg-[#10B981] px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#059669] hover:shadow-md hover:shadow-[#10B981]/20 active:translate-y-0 disabled:cursor-not-allowed disabled:bg-[#10B981]/40 disabled:shadow-none sm:ml-auto"
-          >
-            Go To Dashboard
-          </button>
+          <div className="flex w-full flex-col-reverse gap-3 sm:ml-auto sm:w-auto sm:flex-row">
+            <button
+              type="button"
+              onClick={completeAndGoToDashboard}
+              disabled={!isComplete || isSubmitting}
+              className="h-11 rounded-md border border-slate-200 bg-white px-5 text-sm font-semibold text-[#0F172A] transition hover:border-[#10B981]/50 hover:bg-[#F8FAFC] disabled:cursor-not-allowed disabled:text-slate-400"
+            >
+              Skip for now
+            </button>
+            <button
+              type="button"
+              onClick={completeAndGoToDashboard}
+              disabled={!isComplete || isSubmitting}
+              className="h-11 rounded-md bg-[#10B981] px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#059669] hover:shadow-md hover:shadow-[#10B981]/20 active:translate-y-0 disabled:cursor-not-allowed disabled:bg-[#10B981]/40 disabled:shadow-none"
+            >
+              {isSubmitting ? "Opening..." : "Go to Dashboard"}
+            </button>
+          </div>
         ) : (
           <>
             <button

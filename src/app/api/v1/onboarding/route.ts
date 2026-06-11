@@ -436,7 +436,6 @@ export async function POST(request: Request) {
           preferred_roles: preferredRoles,
           experience_level: parsed.experienceLevel,
           location: preferredLocations[0] ?? null,
-          onboarding_completed: true,
         },
         { onConflict: "id" },
       )
@@ -455,7 +454,7 @@ export async function POST(request: Request) {
     }
 
     return successResponse(
-      "Onboarding completed",
+      "Core onboarding saved",
       {
         profile,
         skills,

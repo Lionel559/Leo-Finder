@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 
-import { AuthError, getUserProfile, requireAuth } from "@/lib/auth";
+import {
+  AuthError,
+  getCoreOnboardingStatus,
+  requireAuth,
+} from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { OnboardingForm } from "@/components/onboarding/onboarding-form";
 
@@ -24,7 +28,8 @@ export default async function OnboardingPage() {
     throw error;
   }
 
-  const profile = await getUserProfile(user.id, supabase);
+  const coreOnboarding = await getCoreOnboardingStatus(user.id, supabase);
+  const profile = coreOnboarding.profile;
 
   if (profile?.onboarding_completed) {
     redirect("/dashboard");
@@ -72,6 +77,19 @@ export default async function OnboardingPage() {
 
           <OnboardingForm
             initialName={profile?.full_name ?? user.email ?? "there"}
+            initialOnboarding={{
+              coreCompleted: coreOnboarding.completed,
+              preferredRoles: profile?.preferred_roles ?? [],
+              experienceLevel: profile?.experience_level ?? null,
+              preferredLocations:
+                coreOnboarding.preferences.preferredLocations,
+              remotePreference:
+                coreOnboarding.preferences.preferredRemoteStatuses[0] ?? null,
+              skills: coreOnboarding.preferences.preferredSkills,
+              preferredOpportunityTypes:
+                coreOnboarding.preferences.preferredCategories,
+              resumeUpload: coreOnboarding.resumeUpload,
+            }}
           />
         </section>
       </div>
