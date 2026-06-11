@@ -12,6 +12,9 @@ export type UserProfile = {
   timezone: string | null;
   avatar_url: string | null;
   website_url: string | null;
+  portfolio_url: string | null;
+  github_url: string | null;
+  linkedin_url: string | null;
   preferred_roles: string[];
   experience_level: "beginner" | "intermediate" | "advanced" | null;
   onboarding_completed: boolean;
@@ -79,7 +82,7 @@ export async function getUserProfile(
   const { data, error } = await client
     .from("profiles")
     .select(
-      "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
+      "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,portfolio_url,github_url,linkedin_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
     )
     .eq("id", userId)
     .maybeSingle();
@@ -111,7 +114,7 @@ export async function getCoreOnboardingStatus(
     client
       .from("profiles")
       .select(
-        "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
+        "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,portfolio_url,github_url,linkedin_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
       )
       .eq("id", userId)
       .maybeSingle(),

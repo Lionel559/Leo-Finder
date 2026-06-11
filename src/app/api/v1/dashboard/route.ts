@@ -9,6 +9,7 @@ import {
   opportunitySelect,
   type DbOpportunity,
 } from "@/lib/opportunities/server";
+import { getProfileCompletion } from "@/lib/profile/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -16,36 +17,6 @@ export const dynamic = "force-dynamic";
 const noStoreHeaders = {
   "Cache-Control": "private, no-store",
 };
-
-function getProfileCompletionScore({
-  hasProfile,
-  hasRoles,
-  hasExperience,
-  hasLocation,
-  hasPreferences,
-  hasSkills,
-  hasResume,
-}: {
-  hasProfile: boolean;
-  hasRoles: boolean;
-  hasExperience: boolean;
-  hasLocation: boolean;
-  hasPreferences: boolean;
-  hasSkills: boolean;
-  hasResume: boolean;
-}) {
-  let score = 0;
-
-  if (hasProfile) score += 20;
-  if (hasRoles) score += 15;
-  if (hasExperience) score += 10;
-  if (hasLocation) score += 10;
-  if (hasPreferences) score += 20;
-  if (hasSkills) score += 15;
-  if (hasResume) score += 10;
-
-  return Math.min(score, 100);
-}
 
 export async function GET() {
   const supabase = await createSupabaseServerClient();
@@ -57,6 +28,7 @@ export async function GET() {
       applications,
       resumeStatus,
       opportunitiesCountResult,
+      profileCompletion,
     ] = await Promise.all([
       supabase
         .from("opportunities")
@@ -70,6 +42,7 @@ export async function GET() {
         .from("opportunities")
         .select("id", { count: "exact", head: true })
         .eq("status", "published"),
+      getProfileCompletion(context.user.id, supabase),
     ]);
 
     if (opportunitiesResult.error) {
@@ -108,18 +81,6 @@ export async function GET() {
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       )
       .slice(0, 6);
-    const profileCompletionScore = getProfileCompletionScore({
-      hasProfile: true,
-      hasRoles: context.profile.preferred_roles.length > 0,
-      hasExperience: Boolean(context.profile.experience_level),
-      hasLocation: Boolean(context.profile.location),
-      hasPreferences:
-        context.preferences.preferredCategories.length > 0 ||
-        context.preferences.preferredRemoteStatuses.length > 0,
-      hasSkills: context.skillNames.length > 0,
-      hasResume: resumeStatus.uploaded,
-    });
-
     return successResponse(
       "Dashboard loaded",
       {
@@ -135,7 +96,7 @@ export async function GET() {
           onboardingCompleted: context.profile.onboarding_completed,
         },
         stats: {
-          profileCompletionScore,
+          profileCompletionScore: profileCompletion.score,
           totalOpportunities: opportunitiesCountResult.count ?? opportunities.length,
           savedOpportunities: context.savedOpportunityIds.size,
           applicationsTracked: applications.length,

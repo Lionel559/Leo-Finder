@@ -52,7 +52,7 @@ type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>;
 type WelcomeEmailResult = Awaited<ReturnType<typeof sendWelcomeEmail>>;
 
 const profileSelect =
-  "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at";
+  "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,portfolio_url,github_url,linkedin_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at";
 const preferencesSelect = "id,user_id,created_at,updated_at";
 const freePlanSelect = "id,slug,name";
 const subscriptionSelect =

@@ -13,6 +13,13 @@ import {
   type OpportunityViewerContext,
 } from "@/lib/opportunities/server";
 
+export {
+  getProfileCompletion,
+  getUserPreferences,
+  getUserResume,
+  getUserSkills,
+} from "@/lib/profile/server";
+
 type PreferenceRow = {
   preferred_categories: string[] | null;
   preferred_locations: string[] | null;
@@ -518,7 +525,7 @@ export async function loadMatchingProfile(
     supabase
       .from("profiles")
       .select(
-        "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
+        "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,portfolio_url,github_url,linkedin_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
       )
       .eq("id", userId)
       .maybeSingle(),
