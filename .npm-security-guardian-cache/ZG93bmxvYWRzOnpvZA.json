@@ -1,0 +1,10 @@
+{
+  "cachedAt": "2026-06-09T10:11:38.514Z",
+  "cacheKey": "downloads:zod",
+  "value": {
+    "downloads": 185357947,
+    "start": "2026-05-27",
+    "end": "2026-06-02",
+    "package": "zod"
+  }
+}

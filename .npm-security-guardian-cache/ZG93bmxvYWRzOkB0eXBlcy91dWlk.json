@@ -1,0 +1,10 @@
+{
+  "cachedAt": "2026-06-09T10:11:44.315Z",
+  "cacheKey": "downloads:@types/uuid",
+  "value": {
+    "downloads": 38851976,
+    "start": "2026-05-27",
+    "end": "2026-06-02",
+    "package": "@types/uuid"
+  }
+}

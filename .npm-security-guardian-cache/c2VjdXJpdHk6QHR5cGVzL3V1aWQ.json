@@ -1,0 +1,20 @@
+{
+  "cachedAt": "2026-06-10T10:40:19.900Z",
+  "packageName": "@types/uuid",
+  "metadata": {
+    "name": "@types/uuid",
+    "description": "Stub TypeScript definitions entry for uuid, which provides its own types definitions",
+    "license": "MIT",
+    "latestVersion": "11.0.0",
+    "weeklyDownloads": 38851976,
+    "createdAt": "2016-05-17T19:10:59.850Z",
+    "lastPublishedAt": "2025-09-16T21:33:15.821Z",
+    "packageAgeDays": 3675,
+    "dependencyCount": 1,
+    "hasInstallScript": false,
+    "installScriptNames": [],
+    "hasRepository": false,
+    "hasLicense": true,
+    "warnings": []
+  }
+}

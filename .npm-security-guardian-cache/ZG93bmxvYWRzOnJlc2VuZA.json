@@ -1,0 +1,10 @@
+{
+  "cachedAt": "2026-06-09T10:11:36.007Z",
+  "cacheKey": "downloads:resend",
+  "value": {
+    "downloads": 7133503,
+    "start": "2026-05-27",
+    "end": "2026-06-02",
+    "package": "resend"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "cachedAt": "2026-06-10T10:40:19.900Z",
+  "packageName": "zod",
+  "metadata": {
+    "name": "zod",
+    "description": "TypeScript-first schema declaration and validation library with static type inference",
+    "license": "MIT",
+    "latestVersion": "4.4.3",
+    "weeklyDownloads": 185357947,
+    "createdAt": "2020-03-07T21:19:15.387Z",
+    "lastPublishedAt": "2026-05-04T07:06:40.819Z",
+    "packageAgeDays": 2285,
+    "dependencyCount": 0,
+    "hasInstallScript": false,
+    "installScriptNames": [],
+    "hasRepository": true,
+    "hasLicense": true,
+    "warnings": []
+  }
+}

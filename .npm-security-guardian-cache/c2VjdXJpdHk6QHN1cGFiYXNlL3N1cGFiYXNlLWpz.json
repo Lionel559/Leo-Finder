@@ -1,0 +1,20 @@
+{
+  "cachedAt": "2026-06-10T10:40:19.900Z",
+  "packageName": "@supabase/supabase-js",
+  "metadata": {
+    "name": "@supabase/supabase-js",
+    "description": "Isomorphic Javascript SDK for Supabase",
+    "license": "MIT",
+    "latestVersion": "2.108.0",
+    "weeklyDownloads": 19572802,
+    "createdAt": "2020-01-17T04:37:38.575Z",
+    "lastPublishedAt": "2026-06-08T12:01:57.054Z",
+    "packageAgeDays": 2336,
+    "dependencyCount": 5,
+    "hasInstallScript": false,
+    "installScriptNames": [],
+    "hasRepository": true,
+    "hasLicense": true,
+    "warnings": []
+  }
+}

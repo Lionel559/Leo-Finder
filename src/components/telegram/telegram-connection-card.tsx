@@ -1,0 +1,296 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+
+import type { ApiResponse } from "@/types";
+
+type TelegramStatus = "connected" | "not_connected" | "pending";
+
+type TelegramAttempt = {
+  id: string;
+  code: string;
+  botUsername?: string;
+  deepLink?: string;
+  instruction: string;
+  expiresAt: string;
+};
+
+type TelegramConnection = {
+  id: string;
+  username: string | null;
+  connectedAt: string;
+};
+
+type TelegramStatusResponse = {
+  status: TelegramStatus;
+  connection: TelegramConnection | null;
+  attempt: TelegramAttempt | null;
+};
+
+type TelegramConnectionCardProps = {
+  compact?: boolean;
+};
+
+const telegramBotUsername = "Leofinderzz_Bot";
+
+function getTelegramDeepLink(code: string) {
+  return `https://t.me/${telegramBotUsername}?start=${encodeURIComponent(code)}`;
+}
+
+function getAttemptDeepLink(attempt: TelegramAttempt) {
+  return attempt.deepLink ?? getTelegramDeepLink(attempt.code);
+}
+
+function getQrCodeUrl(value: string) {
+  const size = 180;
+
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(
+    value,
+  )}`;
+}
+
+function getStatusLabel(status: TelegramStatus) {
+  if (status === "connected") {
+    return "Connected";
+  }
+
+  if (status === "pending") {
+    return "Pending connection";
+  }
+
+  return "Not connected";
+}
+
+async function requestTelegram(
+  endpoint: "/api/v1/telegram/connect" | "/api/v1/telegram/disconnect",
+) {
+  const response = await fetch(endpoint, {
+    method: "POST",
+  });
+  const body = (await response.json()) as ApiResponse<TelegramStatusResponse>;
+
+  if (!response.ok || !body.success) {
+    throw new Error(body.message || "Telegram connection could not be updated.");
+  }
+
+  return body.data;
+}
+
+async function fetchTelegramStatus() {
+  const response = await fetch("/api/v1/telegram/status", {
+    cache: "no-store",
+  });
+  const body = (await response.json()) as ApiResponse<TelegramStatusResponse>;
+
+  if (!response.ok || !body.success) {
+    throw new Error(body.message || "Telegram status could not be loaded.");
+  }
+
+  if (!body.data) {
+    throw new Error("Telegram status response was empty.");
+  }
+
+  return body.data;
+}
+
+export function TelegramConnectionCard({
+  compact = false,
+}: TelegramConnectionCardProps) {
+  const [status, setStatus] = useState<TelegramStatus>("not_connected");
+  const [connection, setConnection] = useState<TelegramConnection | null>(null);
+  const [attempt, setAttempt] = useState<TelegramAttempt | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const applyStatusData = useCallback((data: TelegramStatusResponse) => {
+    setStatus(data.status);
+    setConnection(data.connection);
+    setAttempt(data.attempt);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadStatus() {
+      try {
+        const data = await fetchTelegramStatus();
+
+        if (isMounted) {
+          applyStatusData(data);
+        }
+      } catch (caughtError) {
+        if (isMounted) {
+          setError(
+            caughtError instanceof Error
+              ? caughtError.message
+              : "Telegram status could not be loaded.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadStatus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [applyStatusData]);
+
+  async function handleConnect() {
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const data = await requestTelegram("/api/v1/telegram/connect");
+
+      if (data) {
+        applyStatusData(data);
+      }
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Telegram connection could not be started.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const data = await requestTelegram("/api/v1/telegram/disconnect");
+
+      if (data) {
+        applyStatusData(data);
+      }
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Telegram connection could not be disconnected.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  const statusLabel = isLoading ? "Checking..." : getStatusLabel(status);
+
+  return (
+    <section
+      className={`rounded-lg border border-slate-200 bg-white ${
+        compact ? "p-4" : "p-5"
+      }`}
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-[#10B981]">
+            Telegram
+          </p>
+          <h3 className="mt-1 text-xl font-semibold text-[#0F172A]">
+            Telegram connection
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Status: <span className="font-semibold">{statusLabel}</span>
+          </p>
+          {status !== "connected" ? (
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Click Connect Telegram and press Start in the bot to receive
+              opportunity alerts.
+            </p>
+          ) : null}
+          {connection?.username ? (
+            <p className="mt-1 text-sm text-slate-600">
+              Connected as @{connection.username}
+            </p>
+          ) : null}
+          {connection?.connectedAt ? (
+            <p className="mt-1 text-sm text-slate-600">
+              Connected {new Date(connection.connectedAt).toLocaleString()}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleConnect}
+            disabled={isLoading || isSubmitting || status === "connected"}
+            className="h-10 rounded-md bg-[#10B981] px-4 text-sm font-semibold text-white transition hover:bg-[#059669] disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            Connect Telegram
+          </button>
+          <button
+            type="button"
+            onClick={handleDisconnect}
+            disabled={isLoading || isSubmitting || status === "not_connected"}
+            className="h-10 rounded-md border border-slate-200 px-4 text-sm font-semibold text-[#0F172A] transition hover:border-[#10B981]/50 hover:bg-[#F8FAFC] disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            Disconnect
+          </button>
+        </div>
+      </div>
+
+      {attempt ? (
+        <div className="mt-4 rounded-md border border-[#10B981]/20 bg-[#10B981]/5 p-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[#0F172A]">
+                {attempt.instruction}
+              </p>
+              <p className="mt-3 text-sm text-slate-600">
+                Fallback code
+              </p>
+              <p className="mt-1 break-all rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-sm font-semibold text-[#0F172A]">
+                {attempt.code}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                Code expires at {new Date(attempt.expiresAt).toLocaleString()}.
+              </p>
+              <a
+                href={getAttemptDeepLink(attempt)}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-flex h-10 items-center rounded-md bg-[#10B981] px-4 text-sm font-semibold text-white transition hover:bg-[#059669]"
+              >
+                Open Telegram Bot
+              </a>
+            </div>
+
+            <details className="shrink-0">
+              <summary className="cursor-pointer text-sm font-semibold text-[#047857]">
+                Show QR code
+              </summary>
+              <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+                {/* QR image is generated by an external QR endpoint from this one-time link. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={getQrCodeUrl(getAttemptDeepLink(attempt))}
+                  alt="Telegram bot connection QR code"
+                  width={180}
+                  height={180}
+                  className="h-[180px] w-[180px]"
+                />
+              </div>
+            </details>
+          </div>
+        </div>
+      ) : null}
+
+      {error ? (
+        <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}

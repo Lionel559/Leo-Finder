@@ -1,0 +1,20 @@
+{
+  "cachedAt": "2026-06-10T10:40:19.900Z",
+  "packageName": "jose",
+  "metadata": {
+    "name": "jose",
+    "description": "JWA, JWS, JWE, JWT, JWK, JWKS for Node.js, Browser, Cloudflare Workers, Deno, Bun, and other Web-interoperable runtimes",
+    "license": "MIT",
+    "latestVersion": "6.2.3",
+    "weeklyDownloads": 80405315,
+    "createdAt": "2014-02-27T14:47:11.534Z",
+    "lastPublishedAt": "2026-04-27T15:23:35.019Z",
+    "packageAgeDays": 4485,
+    "dependencyCount": 0,
+    "hasInstallScript": false,
+    "installScriptNames": [],
+    "hasRepository": true,
+    "hasLicense": true,
+    "warnings": []
+  }
+}

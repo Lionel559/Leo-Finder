@@ -1,0 +1,10 @@
+{
+  "cachedAt": "2026-06-09T10:11:17.678Z",
+  "cacheKey": "downloads:@supabase/ssr",
+  "value": {
+    "downloads": 4587272,
+    "start": "2026-05-27",
+    "end": "2026-06-02",
+    "package": "@supabase/ssr"
+  }
+}
