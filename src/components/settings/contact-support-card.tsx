@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import type { ApiResponse } from "@/types";
 
@@ -41,6 +41,20 @@ export function ContactSupportCard({ email }: ContactSupportCardProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setNotice(null);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [notice]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -138,12 +152,6 @@ export function ContactSupportCard({ email }: ContactSupportCardProps) {
           </p>
         ) : null}
 
-        {notice ? (
-          <p className="rounded-md border border-[#10B981]/20 bg-[#ECFDF5] px-3 py-2 text-sm font-medium text-[#047857]">
-            {notice}
-          </p>
-        ) : null}
-
         <div className="flex justify-end">
           <button
             type="submit"
@@ -154,6 +162,16 @@ export function ContactSupportCard({ email }: ContactSupportCardProps) {
           </button>
         </div>
       </form>
+
+      {notice ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-sm rounded-md border border-[#10B981]/25 bg-[#ECFDF5] px-4 py-3 text-sm font-medium text-[#047857] shadow-lg shadow-slate-900/10 sm:left-auto sm:right-5 sm:mx-0"
+        >
+          {notice}
+        </div>
+      ) : null}
     </section>
   );
 }

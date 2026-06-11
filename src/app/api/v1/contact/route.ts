@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { errorResponse, successResponse, validationErrorResponse } from "@/lib/api";
 import { AuthError, requireAuth } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +12,7 @@ const contactSender = "Leo Finder <onboarding@resend.dev>";
 const noStoreHeaders = {
   "Cache-Control": "private, no-store",
 };
+const isDevelopment = process.env.NODE_ENV !== "production";
 
 const contactSchema = z
   .object({
@@ -26,12 +26,48 @@ type ContactMessage = {
   created_at: string;
 };
 
+type SupabaseSaveError = {
+  code?: string;
+  details?: string | null;
+  hint?: string | null;
+  message: string;
+};
+
 function formatUnknownError(error: unknown) {
   if (error instanceof Error) {
     return error.message;
   }
 
   return String(error);
+}
+
+function getSupabaseErrorDetails(error: SupabaseSaveError) {
+  return {
+    code: error.code,
+    details: error.details,
+    hint: error.hint,
+    message: error.message,
+  };
+}
+
+function getDevelopmentSaveMessage(error: SupabaseSaveError) {
+  if (!isDevelopment) {
+    return "Your message could not be saved.";
+  }
+
+  if (error.code === "42P01") {
+    return "Contact support table is missing. Run the contact_messages migration.";
+  }
+
+  if (error.code === "42703" || error.code === "PGRST204") {
+    return `Contact support schema mismatch: ${error.message}`;
+  }
+
+  if (error.code === "42501") {
+    return `Contact support insert was blocked by database permissions or RLS: ${error.message}`;
+  }
+
+  return `Contact support save failed: ${error.message}`;
 }
 
 function escapeHtml(value: string) {
@@ -217,8 +253,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const admin = createSupabaseAdminClient();
-    const { data, error: saveError } = await admin
+    const { data, error: saveError } = await supabase
       .from("contact_messages")
       .insert({
         email,
@@ -230,10 +265,25 @@ export async function POST(request: Request) {
       .single();
 
     if (saveError) {
+      const details = getSupabaseErrorDetails(saveError);
+
+      console.error("[contact] contact_messages insert failed", {
+        error: saveError,
+        payload: {
+          email,
+          subject: parsed.data.subject,
+          user_id: user.id,
+        },
+        supabase: details,
+      });
+
       return errorResponse(
-        "Your message could not be saved.",
+        getDevelopmentSaveMessage(saveError),
         500,
-        { code: "CONTACT_SAVE_FAILED", details: saveError.message },
+        {
+          code: "CONTACT_SAVE_FAILED",
+          details: isDevelopment ? details : undefined,
+        },
         noStoreHeaders,
       );
     }
