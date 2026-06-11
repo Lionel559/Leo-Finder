@@ -68,6 +68,34 @@ function getStatusLabel(status: TelegramStatus) {
   return "Not connected";
 }
 
+function formatConnectedDate(value: string | null | undefined) {
+  if (!value) {
+    return "Unavailable";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Unavailable";
+  }
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    hour: "numeric",
+    hour12: true,
+    minute: "2-digit",
+    month: "long",
+    year: "numeric",
+  })
+    .formatToParts(date)
+    .reduce<Record<string, string>>((result, part) => {
+      result[part.type] = part.value;
+      return result;
+    }, {});
+
+  return `${parts.month} ${parts.day}, ${parts.year}, ${parts.hour}:${parts.minute} ${parts.dayPeriod}`;
+}
+
 async function requestTelegram(
   endpoint: "/api/v1/telegram/connect" | "/api/v1/telegram/disconnect",
 ) {
@@ -253,9 +281,7 @@ export function TelegramConnectionCard({
   const statusLabel = isLoading ? "Checking..." : getStatusLabel(status);
   const telegramUsername =
     connection?.telegramUsername ?? connection?.username ?? null;
-  const connectedDateLabel = connection?.connectedAt
-    ? new Date(connection.connectedAt).toLocaleString()
-    : "Unavailable";
+  const connectedDateLabel = formatConnectedDate(connection?.connectedAt);
 
   return (
     <section
@@ -263,7 +289,7 @@ export function TelegramConnectionCard({
         compact ? "p-4" : "p-5"
       }`}
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-sm font-semibold uppercase tracking-wide text-[#10B981]">
             Telegram
@@ -274,36 +300,12 @@ export function TelegramConnectionCard({
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Status: <span className="font-semibold">{statusLabel}</span>
           </p>
-          {status === "connected" ? (
-            <div className="mt-4 rounded-md border border-[#10B981]/20 bg-[#10B981]/5 p-4">
-              <p className="text-sm font-semibold text-[#0F172A]">
-                Connected to Telegram
-              </p>
-              <dl className="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-                <div>
-                  <dt className="font-medium text-slate-500">
-                    Telegram username
-                  </dt>
-                  <dd className="mt-1 break-all font-semibold text-[#0F172A]">
-                    {telegramUsername ? `@${telegramUsername}` : "Unavailable"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-slate-500">
-                    Connected date
-                  </dt>
-                  <dd className="mt-1 font-semibold text-[#0F172A]">
-                    {connectedDateLabel}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          ) : (
+          {status !== "connected" ? (
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Click Connect Telegram and press Start in the bot to receive
               opportunity alerts.
             </p>
-          )}
+          ) : null}
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -342,6 +344,53 @@ export function TelegramConnectionCard({
           </button>
         </div>
       </div>
+
+      {status === "connected" ? (
+        <div className="mt-5 rounded-lg border border-[#10B981]/25 bg-[#F0FDF4] p-5 shadow-sm shadow-[#10B981]/10 sm:p-6">
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#10B981] text-white shadow-sm shadow-[#10B981]/30"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.5"
+                className="h-5 w-5"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </span>
+            <div className="min-w-0">
+              <p className="text-base font-semibold text-[#064E3B]">
+                Telegram Connected Successfully
+              </p>
+            </div>
+          </div>
+
+          <dl className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="min-w-0 rounded-md border border-[#BBF7D0] bg-white px-4 py-4">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Telegram Username
+              </dt>
+              <dd className="mt-2 max-w-full overflow-x-auto whitespace-nowrap text-base font-semibold text-[#0F172A]">
+                {telegramUsername ? `@${telegramUsername}` : "Unavailable"}
+              </dd>
+            </div>
+            <div className="min-w-0 rounded-md border border-[#BBF7D0] bg-white px-4 py-4">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Connected On
+              </dt>
+              <dd className="mt-2 max-w-full overflow-x-auto whitespace-nowrap text-base font-semibold text-[#0F172A]">
+                {connectedDateLabel}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      ) : null}
 
       {status !== "connected" && attempt ? (
         <div className="mt-4 rounded-md border border-[#10B981]/20 bg-[#10B981]/5 p-4">

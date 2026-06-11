@@ -7,6 +7,7 @@ import {
 } from "@/lib/api";
 import {
   getWelcomeEmailSender,
+  saveWelcomeEmailAttemptLog,
   sendWelcomeEmail,
   welcomeEmailSubject,
 } from "@/lib/notifications";
@@ -236,58 +237,6 @@ function getWelcomeEmailDebug(result: WelcomeEmailResult) {
   };
 }
 
-async function saveWelcomeEmailLog({
-  admin,
-  result,
-  userId,
-}: {
-  admin: SupabaseAdminClient;
-  result: WelcomeEmailResult;
-  userId: string;
-}) {
-  const emailLog = {
-    user_id: userId,
-    email_to: result.recipientEmail,
-    template: "welcome",
-    subject: result.subject,
-    status: result.status,
-    provider_message_id: result.sent ? result.id : null,
-    error_message: result.sent ? null : result.error,
-    sent_at: result.sent ? new Date().toISOString() : null,
-  };
-
-  console.info("[register] welcome email log attempt", {
-    email_to: emailLog.email_to,
-    provider_message_id: emailLog.provider_message_id,
-    status: emailLog.status,
-    subject: emailLog.subject,
-    template: emailLog.template,
-    userId,
-  });
-
-  try {
-    const { error } = await admin.from("email_logs").insert(emailLog);
-
-    if (error) {
-      console.error("[register] email log save failed", {
-        emailLog,
-        error: formatDbError(error),
-      });
-      return;
-    }
-
-    console.info("[register] email log saved", {
-      emailLog,
-      userId,
-    });
-  } catch (error) {
-    console.error("[register] email log save failed", {
-      emailLog,
-      error: formatUnknownError(error),
-    });
-  }
-}
-
 async function readJson(request: Request) {
   try {
     return await request.json();
@@ -507,9 +456,9 @@ export async function POST(request: Request) {
     email,
     fullName,
   }).catch((error: unknown): WelcomeEmailResult => ({
-    error: formatUnknownError(error),
+    error: `Resend request failed. ${formatUnknownError(error)}`,
     recipientEmail: email,
-    reason: "provider_error",
+    reason: "request_failed",
     resendError: {
       message: formatUnknownError(error),
     },
@@ -525,9 +474,9 @@ export async function POST(request: Request) {
     userId: user.id,
   });
 
-  await saveWelcomeEmailLog({
-    admin,
+  await saveWelcomeEmailAttemptLog({
     result: welcomeEmail,
+    source: "register",
     userId: user.id,
   });
 

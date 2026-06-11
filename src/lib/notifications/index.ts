@@ -2,6 +2,8 @@ import "server-only";
 
 import { Resend } from "resend";
 
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+
 type WelcomeEmailInput = {
   userId: string;
   email: string;
@@ -12,7 +14,14 @@ type ResendErrorLog = Record<string, unknown> & {
   message: string;
 };
 
-type WelcomeEmailResult =
+type WelcomeEmailFailureReason =
+  | "invalid_recipient"
+  | "missing_api_key"
+  | "provider_error"
+  | "request_failed"
+  | "sender_rejected";
+
+export type WelcomeEmailResult =
   | {
       sent: true;
       status: "sent";
@@ -37,7 +46,7 @@ type WelcomeEmailResult =
   | {
       sent: false;
       status: "failed";
-      reason: "provider_error";
+      reason: Exclude<WelcomeEmailFailureReason, "missing_api_key">;
       error: string;
       recipientEmail: string;
       resendError: ResendErrorLog;
@@ -47,7 +56,7 @@ type WelcomeEmailResult =
     };
 
 export const defaultWelcomeEmailSender = "Leo Finder <onboarding@resend.dev>";
-export const welcomeEmailSubject = "Welcome to Leo Finder 🚀";
+export const welcomeEmailSubject = "Welcome to Leo Finder \uD83D\uDE80";
 
 let cachedResend: Resend | null = null;
 
@@ -132,6 +141,72 @@ function formatResendError(error: unknown): ResendErrorLog {
   };
 }
 
+function getErrorMessage(error: ResendErrorLog) {
+  return error.message || JSON.stringify(error);
+}
+
+function classifyResendError({
+  error,
+  recipientEmail,
+  senderEmail,
+}: {
+  error: ResendErrorLog;
+  recipientEmail: string;
+  senderEmail: string;
+}): {
+  message: string;
+  reason: Exclude<WelcomeEmailFailureReason, "missing_api_key">;
+} {
+  const message = getErrorMessage(error);
+  const lowerMessage = message.toLowerCase();
+
+  if (
+    lowerMessage.includes("from") ||
+    lowerMessage.includes("sender") ||
+    lowerMessage.includes("domain") ||
+    lowerMessage.includes("verified")
+  ) {
+    return {
+      message: `Sender rejected by Resend (${senderEmail}). ${message}`,
+      reason: "sender_rejected",
+    };
+  }
+
+  if (
+    lowerMessage.includes("recipient") ||
+    lowerMessage.includes("invalid email") ||
+    lowerMessage.includes("own email") ||
+    lowerMessage.includes("testing emails") ||
+    lowerMessage.includes("to")
+  ) {
+    return {
+      message: `Recipient is invalid or rejected by Resend (${recipientEmail}). ${message}`,
+      reason: "invalid_recipient",
+    };
+  }
+
+  return {
+    message: `Resend request failed. ${message}`,
+    reason: "request_failed",
+  };
+}
+
+function formatUnknownError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function formatEmailLogError(error: { message?: string } | unknown) {
+  if (error && typeof error === "object" && "message" in error) {
+    return String(error.message);
+  }
+
+  return formatUnknownError(error);
+}
+
 export async function sendWelcomeEmail(
   input: WelcomeEmailInput,
 ): Promise<WelcomeEmailResult> {
@@ -167,7 +242,7 @@ export async function sendWelcomeEmail(
   const firstName = input.fullName?.split(" ").filter(Boolean)[0] ?? "there";
   const escapedFirstName = escapeHtml(firstName);
 
-  const { data, error } = await resend.emails
+  const resendResponse = await resend.emails
     .send({
       from: senderEmail,
       to: recipientEmail,
@@ -206,31 +281,39 @@ export async function sendWelcomeEmail(
       data: null,
       error: formatResendError(caughtError),
     }));
+  const { data, error } = resendResponse;
 
   console.info("[welcome-email] Resend response", {
     recipient: recipientEmail,
-    resendResponse: data,
+    resendResponse,
     sender: senderEmail,
     subject,
   });
 
   if (error) {
     const resendError = formatResendError(error);
+    const classifiedError = classifyResendError({
+      error: resendError,
+      recipientEmail,
+      senderEmail,
+    });
 
     console.error("[welcome-email] Resend error", {
+      error: classifiedError.message,
       recipient: recipientEmail,
       resendError,
       resendErrorRaw: error,
+      resendResponse,
       sender: senderEmail,
       subject,
     });
 
     return {
-      error: resendError.message,
+      error: classifiedError.message,
       recipientEmail,
-      reason: "provider_error",
+      reason: classifiedError.reason,
       resendError,
-      resendResponse: data,
+      resendResponse,
       senderEmail,
       sent: false,
       status: "failed",
@@ -242,10 +325,77 @@ export async function sendWelcomeEmail(
     id: data?.id ?? null,
     recipientEmail,
     resendError: null,
-    resendResponse: data,
+    resendResponse,
     senderEmail,
     sent: true,
     status: "sent",
     subject,
   };
+}
+
+export async function saveWelcomeEmailAttemptLog({
+  result,
+  source = "welcome-email",
+  userId = null,
+}: {
+  result: WelcomeEmailResult;
+  source?: string;
+  userId?: string | null;
+}) {
+  const emailLog = {
+    user_id: userId,
+    email_to: result.recipientEmail,
+    template: "welcome",
+    subject: result.subject,
+    status: result.status,
+    provider_message_id: result.sent ? result.id : null,
+    error_message: result.sent ? null : result.error,
+    sent_at: result.sent ? new Date().toISOString() : null,
+  };
+
+  console.info(`[${source}] email_logs insert started`, {
+    email_to: emailLog.email_to,
+    provider_message_id: emailLog.provider_message_id,
+    status: emailLog.status,
+    subject: emailLog.subject,
+    template: emailLog.template,
+    userId,
+  });
+
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("email_logs").insert(emailLog);
+
+    if (error) {
+      console.error(`[${source}] email_logs insert failed`, {
+        emailLog,
+        error,
+      });
+
+      return {
+        error: formatEmailLogError(error),
+        saved: false,
+      };
+    }
+
+    console.info(`[${source}] email_logs insert saved`, {
+      emailLog,
+      userId,
+    });
+
+    return {
+      error: null,
+      saved: true,
+    };
+  } catch (error) {
+    console.error(`[${source}] email_logs insert failed`, {
+      emailLog,
+      error,
+    });
+
+    return {
+      error: formatUnknownError(error),
+      saved: false,
+    };
+  }
 }
