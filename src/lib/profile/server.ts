@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { UserProfile } from "@/lib/auth";
+import { getUserProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const profileSelect =
@@ -283,18 +283,13 @@ export async function getProfileCompletion(
   supabase?: SupabaseClient,
 ): Promise<ProfileCompletion> {
   const client = await getClient(supabase);
-  const [profileResult, preferences, skills, resume] = await Promise.all([
-    client.from("profiles").select(profileSelect).eq("id", userId).maybeSingle(),
+  const [profile, preferences, skills, resume] = await Promise.all([
+    getUserProfile(userId, client),
     getUserPreferences(userId, client),
     getUserSkills(userId, client),
     getUserResume(userId, client),
   ]);
 
-  if (profileResult.error) {
-    throw profileResult.error;
-  }
-
-  const profile = profileResult.data as UserProfile | null;
   const items: ProfileCompletionItem[] = [
     {
       key: "name",

@@ -38,6 +38,20 @@ function formatUnknownError(error: unknown) {
 }
 
 export async function POST(request: Request) {
+  if (process.env.NODE_ENV !== "development") {
+    return NextResponse.json(
+      {
+        error: "Email test endpoint is only available in development.",
+        resendResponse: null,
+        success: false,
+      },
+      {
+        headers: noStoreHeaders,
+        status: 404,
+      },
+    );
+  }
+
   const body = await readJson(request);
   const parsed = testEmailSchema.safeParse(body);
   const rawEmail =

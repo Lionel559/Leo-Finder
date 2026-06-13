@@ -14,6 +14,10 @@ async function getOpportunityId(context: { params: Promise<{ id: string }> }) {
   return id;
 }
 
+function isExpired(expiresAt: string | null) {
+  return expiresAt ? new Date(expiresAt).getTime() <= Date.now() : false;
+}
+
 export async function POST(
   _request: Request,
   context: { params: Promise<{ id: string }> },
@@ -23,6 +27,48 @@ export async function POST(
   try {
     const { user } = await requireCompletedOnboarding(supabase);
     const opportunityId = await getOpportunityId(context);
+    const { data: opportunity, error: opportunityError } = await supabase
+      .from("opportunities")
+      .select("id,status,expires_at")
+      .eq("id", opportunityId)
+      .maybeSingle();
+
+    if (opportunityError) {
+      return errorResponse(
+        "Opportunity could not be checked before saving.",
+        500,
+        { code: "OPPORTUNITY_SAVE_CHECK_FAILED", details: opportunityError.message },
+        noStoreHeaders,
+      );
+    }
+
+    if (!opportunity) {
+      return errorResponse(
+        "We could not find that opportunity.",
+        404,
+        { code: "OPPORTUNITY_NOT_FOUND" },
+        noStoreHeaders,
+      );
+    }
+
+    if (opportunity.status !== "published") {
+      return errorResponse(
+        "This opportunity is not available to save.",
+        409,
+        { code: "OPPORTUNITY_NOT_AVAILABLE" },
+        noStoreHeaders,
+      );
+    }
+
+    if (isExpired(opportunity.expires_at)) {
+      return errorResponse(
+        "This opportunity has expired and can no longer be saved.",
+        409,
+        { code: "OPPORTUNITY_EXPIRED" },
+        noStoreHeaders,
+      );
+    }
+
     const { error } = await supabase.from("saved_opportunities").upsert(
       {
         user_id: user.id,

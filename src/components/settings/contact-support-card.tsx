@@ -15,10 +15,15 @@ type ContactResponse = {
   messageId: string;
 };
 
+type ContactSubmitResult = {
+  data: ContactResponse | undefined;
+  message: string;
+};
+
 async function sendContactMessage(payload: {
   message: string;
   subject: string;
-}) {
+}): Promise<ContactSubmitResult> {
   const response = await fetch("/api/v1/contact", {
     method: "POST",
     headers: {
@@ -32,7 +37,10 @@ async function sendContactMessage(payload: {
     throw new Error(body.message || "Your message could not be sent.");
   }
 
-  return body.data;
+  return {
+    data: body.data,
+    message: body.message,
+  };
 }
 
 export function ContactSupportCard({ email }: ContactSupportCardProps) {
@@ -63,10 +71,10 @@ export function ContactSupportCard({ email }: ContactSupportCardProps) {
     setIsSubmitting(true);
 
     try {
-      await sendContactMessage({ message, subject });
+      const result = await sendContactMessage({ message, subject });
       setSubject("");
       setMessage("");
-      setNotice("Your message has been sent. We will reply soon.");
+      setNotice(result.message);
     } catch (caughtError) {
       setError(
         caughtError instanceof Error

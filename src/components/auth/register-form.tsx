@@ -249,10 +249,10 @@ export function RegisterForm() {
 
       <button
         type="button"
-        onClick={() => setError("Google sign-in is coming soon.")}
-        className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-[#0F172A] transition duration-150 hover:-translate-y-0.5 hover:border-[#10B981]/50 hover:bg-[#F8FAFC] hover:shadow-sm active:translate-y-0"
+        disabled
+        className="h-11 w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-400"
       >
-        Continue with Google
+        Continue with Google (Coming soon)
       </button>
 
       <p className="text-center text-sm text-slate-600">

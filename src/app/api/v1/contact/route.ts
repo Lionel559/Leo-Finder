@@ -3,16 +3,17 @@ import { z } from "zod";
 
 import { errorResponse, successResponse, validationErrorResponse } from "@/lib/api";
 import { AuthError, requireAuth } from "@/lib/auth";
+import { getContactEmailSender, getSupportEmail } from "@/lib/config/email";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const adminEmail = "ayooladeji8@gmail.com";
-const contactSender = "Leo Finder <onboarding@resend.dev>";
 const noStoreHeaders = {
   "Cache-Control": "private, no-store",
 };
 const isDevelopment = process.env.NODE_ENV !== "production";
+const savedButEmailFailedMessage =
+  "Your message was saved. Email notification could not be sent, but we will still see it.";
 
 const contactSchema = z
   .object({
@@ -111,13 +112,33 @@ async function sendContactEmail({
   userId: string;
 }) {
   const apiKey = process.env.RESEND_API_KEY?.trim();
+  const supportEmail = getSupportEmail();
+  const contactSender = getContactEmailSender();
 
   if (!apiKey) {
     const error = "RESEND_API_KEY is missing; contact email skipped.";
     console.warn("[contact] Resend skipped", {
       error,
       messageId,
-      recipient: adminEmail,
+      recipient: supportEmail,
+      sender: contactSender,
+      userEmail: email,
+      userId,
+    });
+
+    return {
+      attempted: false,
+      error,
+      response: null,
+      sent: false,
+    };
+  }
+
+  if (!supportEmail) {
+    const error = "SUPPORT_EMAIL is missing; contact email skipped.";
+    console.warn("[contact] support email missing", {
+      error,
+      messageId,
       sender: contactSender,
       userEmail: email,
       userId,
@@ -142,7 +163,7 @@ async function sendContactEmail({
   try {
     const response = await resend.emails.send({
       from: contactSender,
-      to: adminEmail,
+      to: supportEmail,
       subject: emailSubject,
       text: [
         "New Leo Finder contact message",
@@ -171,7 +192,7 @@ async function sendContactEmail({
 
     console.info("[contact] Resend response", {
       messageId,
-      recipient: adminEmail,
+      recipient: supportEmail,
       response,
       sender: contactSender,
       userEmail: email,
@@ -184,7 +205,7 @@ async function sendContactEmail({
       console.error("[contact] Resend error", {
         error,
         messageId,
-        recipient: adminEmail,
+        recipient: supportEmail,
         response,
         sender: contactSender,
         userEmail: email,
@@ -211,7 +232,7 @@ async function sendContactEmail({
       error,
       message: messageText,
       messageId,
-      recipient: adminEmail,
+      recipient: supportEmail,
       sender: contactSender,
       userEmail: email,
       userId,
@@ -298,7 +319,9 @@ export async function POST(request: Request) {
     });
 
     return successResponse(
-      "Your message has been sent. We will reply soon.",
+      emailDelivery.sent
+        ? "Your message has been sent. We will reply soon."
+        : savedButEmailFailedMessage,
       {
         createdAt: contactMessage.created_at,
         emailAttempted: emailDelivery.attempted,

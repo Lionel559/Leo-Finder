@@ -53,6 +53,8 @@ type WelcomeEmailResult = Awaited<ReturnType<typeof sendWelcomeEmail>>;
 
 const profileSelect =
   "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,portfolio_url,github_url,linkedin_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at";
+const profileSelectWithoutSocialLinks =
+  "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at";
 const preferencesSelect = "id,user_id,created_at,updated_at";
 const freePlanSelect = "id,slug,name";
 const subscriptionSelect =
@@ -68,6 +70,59 @@ function formatDbError(error: RegistrationDbError) {
     details: error.details ?? null,
     hint: error.hint ?? null,
     message: error.message,
+  };
+}
+
+function isMissingOptionalSocialProfileColumn(error: RegistrationDbError) {
+  return (
+    error.code === "42703" &&
+    ["portfolio_url", "github_url", "linkedin_url"].some((column) =>
+      error.message.includes(column),
+    )
+  );
+}
+
+function normalizeProfile(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  return {
+    portfolio_url: null,
+    github_url: null,
+    linkedin_url: null,
+    ...(data as Record<string, unknown>),
+  };
+}
+
+async function upsertProfile(
+  admin: SupabaseAdminClient,
+  values: Record<string, unknown>,
+) {
+  const result = await admin
+    .from("profiles")
+    .upsert(values, { onConflict: "id" })
+    .select(profileSelect)
+    .single();
+
+  if (!result.error || !isMissingOptionalSocialProfileColumn(result.error)) {
+    return {
+      data: normalizeProfile(result.data),
+      error: result.error,
+      select: profileSelect,
+    };
+  }
+
+  const fallbackResult = await admin
+    .from("profiles")
+    .upsert(values, { onConflict: "id" })
+    .select(profileSelectWithoutSocialLinks)
+    .single();
+
+  return {
+    data: normalizeProfile(fallbackResult.data),
+    error: fallbackResult.error,
+    select: profileSelectWithoutSocialLinks,
   };
 }
 
@@ -309,11 +364,11 @@ export async function POST(request: Request) {
     table: "profiles",
     values: profileValues,
   };
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .upsert(profileValues, { onConflict: "id" })
-    .select(profileSelect)
-    .single();
+  const { data: profile, error: profileError, select } = await upsertProfile(
+    admin,
+    profileValues,
+  );
+  profileQuery.select = select;
 
   if (profileError) {
     return setupFailureResponse({
@@ -327,7 +382,7 @@ export async function POST(request: Request) {
   }
 
   logRegistrationDbSuccess("profile creation", user.id, profileQuery, {
-    profileId: profile.id,
+    profileId: profile?.id,
   });
 
   const preferencesValues = { user_id: user.id };

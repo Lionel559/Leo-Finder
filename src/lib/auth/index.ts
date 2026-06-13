@@ -47,6 +47,11 @@ export type CoreOnboardingStatus = {
   } | null;
 };
 
+const profileSelect =
+  "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,portfolio_url,github_url,linkedin_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at";
+const profileSelectWithoutSocialLinks =
+  "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at";
+
 export class AuthError extends Error {
   constructor(
     message: string,
@@ -74,24 +79,65 @@ export async function getCurrentUser(
   return user;
 }
 
+function isMissingOptionalSocialProfileColumn(error: { code?: string; message: string }) {
+  return (
+    error.code === "42703" &&
+    ["portfolio_url", "github_url", "linkedin_url"].some((column) =>
+      error.message.includes(column),
+    )
+  );
+}
+
+function normalizeProfile(data: unknown): UserProfile | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  return {
+    portfolio_url: null,
+    github_url: null,
+    linkedin_url: null,
+    ...(data as Record<string, unknown>),
+  } as UserProfile;
+}
+
+async function selectUserProfile(
+  client: SupabaseClient,
+  userId: string,
+): Promise<UserProfile | null> {
+  const { data, error } = await client
+    .from("profiles")
+    .select(profileSelect)
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!error) {
+    return normalizeProfile(data);
+  }
+
+  if (!isMissingOptionalSocialProfileColumn(error)) {
+    throw error;
+  }
+
+  const fallbackResult = await client
+    .from("profiles")
+    .select(profileSelectWithoutSocialLinks)
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (fallbackResult.error) {
+    throw fallbackResult.error;
+  }
+
+  return normalizeProfile(fallbackResult.data);
+}
+
 export async function getUserProfile(
   userId: string,
   supabase?: SupabaseClient,
 ): Promise<UserProfile | null> {
   const client = supabase ?? (await createSupabaseServerClient());
-  const { data, error } = await client
-    .from("profiles")
-    .select(
-      "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,portfolio_url,github_url,linkedin_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
-    )
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return data as UserProfile | null;
+  return selectUserProfile(client, userId);
 }
 
 function toStringArray(value: unknown): string[] {
@@ -106,18 +152,12 @@ export async function getCoreOnboardingStatus(
 ): Promise<CoreOnboardingStatus> {
   const client = supabase ?? (await createSupabaseServerClient());
   const [
-    profileResult,
+    profile,
     preferencesResult,
     resumeResult,
     userSkillsResult,
   ] = await Promise.all([
-    client
-      .from("profiles")
-      .select(
-        "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,portfolio_url,github_url,linkedin_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
-      )
-      .eq("id", userId)
-      .maybeSingle(),
+    selectUserProfile(client, userId),
     client
       .from("user_preferences")
       .select(
@@ -139,10 +179,6 @@ export async function getCoreOnboardingStatus(
       .eq("user_id", userId),
   ]);
 
-  if (profileResult.error) {
-    throw profileResult.error;
-  }
-
   if (preferencesResult.error) {
     throw preferencesResult.error;
   }
@@ -155,7 +191,6 @@ export async function getCoreOnboardingStatus(
     throw userSkillsResult.error;
   }
 
-  const profile = profileResult.data as UserProfile | null;
   const preferencesRow = preferencesResult.data;
   const preferences = {
     preferredCategories: toStringArray(preferencesRow?.preferred_categories),

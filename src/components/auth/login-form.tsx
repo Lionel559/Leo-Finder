@@ -88,10 +88,10 @@ export function LoginForm() {
           </label>
           <button
             type="button"
-            onClick={() => setError("Password reset is coming soon.")}
-            className="text-sm font-medium text-[#10B981] transition hover:text-[#059669] hover:underline"
+            disabled
+            className="cursor-not-allowed text-sm font-medium text-slate-400"
           >
-            Forgot password?
+            Forgot password? Coming soon
           </button>
         </div>
         <PasswordInput

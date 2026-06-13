@@ -2,6 +2,7 @@ import "server-only";
 
 import { Resend } from "resend";
 
+import { getConfiguredWelcomeEmailSender } from "@/lib/config/email";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type WelcomeEmailInput = {
@@ -71,7 +72,6 @@ export type WelcomeEmailResult =
       subject: string;
     };
 
-export const defaultWelcomeEmailSender = "Leo Finder <onboarding@resend.dev>";
 export const welcomeEmailSubject = "Welcome to Leo Finder \uD83D\uDE80";
 
 const resendTestingModeMessage =
@@ -112,7 +112,7 @@ function getResendClient() {
 }
 
 export function getWelcomeEmailSender() {
-  return defaultWelcomeEmailSender;
+  return getConfiguredWelcomeEmailSender();
 }
 
 function escapeHtml(value: string) {

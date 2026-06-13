@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAIService } from "@/lib/ai";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { UserProfile } from "@/lib/auth";
+import { getUserProfile, type UserProfile } from "@/lib/auth";
 import type { Opportunity, OpportunityMatch } from "@/lib/opportunities";
 import {
   formatOpportunity,
@@ -515,20 +515,14 @@ export async function loadMatchingProfile(
   userId: string,
 ): Promise<MatchingProfile> {
   const [
-    profileResult,
+    profile,
     preferencesResult,
     userSkillsResult,
     resumeAnalysisResult,
     savedResult,
     applicationsResult,
   ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select(
-        "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,portfolio_url,github_url,linkedin_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
-      )
-      .eq("id", userId)
-      .maybeSingle(),
+    getUserProfile(userId, supabase),
     supabase
       .from("user_preferences")
       .select(
@@ -556,7 +550,6 @@ export async function loadMatchingProfile(
       .eq("user_id", userId),
   ]);
 
-  if (profileResult.error) throw profileResult.error;
   if (preferencesResult.error) throw preferencesResult.error;
   if (userSkillsResult.error) throw userSkillsResult.error;
   if (resumeAnalysisResult.error) throw resumeAnalysisResult.error;
@@ -605,7 +598,7 @@ export async function loadMatchingProfile(
 
   return {
     userId,
-    profile: profileResult.data as UserProfile | null,
+    profile,
     preferences: {
       preferredCategories: toStringArray(preferences?.preferred_categories),
       preferredLocations: toStringArray(preferences?.preferred_locations),
@@ -646,7 +639,14 @@ export async function loadOpportunityForMatching(
 
 export async function saveMatchScoreResult(result: MatchScoreResult) {
   const admin = createSupabaseAdminClient();
-  const { error } = await admin.from("recommendation_history").insert({
+  const recommendedAt = new Date();
+  const dayStart = new Date(recommendedAt);
+  const nextDay = new Date(recommendedAt);
+
+  dayStart.setUTCHours(0, 0, 0, 0);
+  nextDay.setUTCHours(24, 0, 0, 0);
+
+  const recommendationHistoryPayload = {
     user_id: result.userId,
     opportunity_id: result.opportunityId,
     score: result.overallScore,
@@ -664,7 +664,31 @@ export async function saveMatchScoreResult(result: MatchScoreResult) {
       experience_match_score: result.experienceMatchScore,
       source: "rule_based_v1",
     },
-  });
+    recommended_at: recommendedAt.toISOString(),
+  };
+  const { data: existingRows, error: existingError } = await admin
+    .from("recommendation_history")
+    .select("id")
+    .eq("user_id", result.userId)
+    .eq("opportunity_id", result.opportunityId)
+    .gte("recommended_at", dayStart.toISOString())
+    .lt("recommended_at", nextDay.toISOString())
+    .order("recommended_at", { ascending: false })
+    .limit(1);
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  const existingId = (existingRows as { id: string }[] | null)?.[0]?.id;
+  const { error } = existingId
+    ? await admin
+        .from("recommendation_history")
+        .update(recommendationHistoryPayload)
+        .eq("id", existingId)
+    : await admin
+        .from("recommendation_history")
+        .insert(recommendationHistoryPayload);
 
   if (error) {
     throw error;

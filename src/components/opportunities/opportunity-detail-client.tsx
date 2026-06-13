@@ -400,9 +400,9 @@ export function OpportunityDetailClient({
             <button
               type="button"
               disabled
-              className="h-11 rounded-md bg-[#0F172A]/5 px-4 text-sm font-semibold text-[#0F172A]"
+              className="h-11 cursor-not-allowed rounded-md bg-[#0F172A]/5 px-4 text-sm font-semibold text-slate-400"
             >
-              Generate cover letter
+              Generate cover letter (Coming soon)
             </button>
             {opportunity.applyUrl ? (
               <a

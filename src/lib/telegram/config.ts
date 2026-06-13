@@ -3,7 +3,11 @@ export const DEFAULT_TELEGRAM_BOT_USERNAME = "Leofinderzz_Bot";
 export function getTelegramBotUsername(
   source: NodeJS.ProcessEnv = process.env,
 ) {
-  return source.TELEGRAM_BOT_USERNAME?.trim() || DEFAULT_TELEGRAM_BOT_USERNAME;
+  return (
+    source.TELEGRAM_BOT_USERNAME?.trim() ||
+    source.TELEGRAM_BOT_USERNAME_FALLBACK?.trim() ||
+    DEFAULT_TELEGRAM_BOT_USERNAME
+  );
 }
 
 export function getTelegramBotToken(source: NodeJS.ProcessEnv = process.env) {

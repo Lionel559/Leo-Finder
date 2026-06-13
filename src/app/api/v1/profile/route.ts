@@ -73,6 +73,28 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function isMissingOptionalSocialProfileColumn(error: { code?: string; message: string }) {
+  return (
+    error.code === "42703" &&
+    ["portfolio_url", "github_url", "linkedin_url"].some((column) =>
+      error.message.includes(column),
+    )
+  );
+}
+
+function normalizeProfile(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  return {
+    portfolio_url: null,
+    github_url: null,
+    linkedin_url: null,
+    ...(data as Record<string, unknown>),
+  };
+}
+
 async function readJson(request: Request) {
   try {
     return await request.json();
@@ -135,29 +157,52 @@ export async function PATCH(request: Request) {
     const preferredRoles = uniqueValues(parsed.data.preferredRoles);
     const preferredLocations = uniqueValues(parsed.data.preferredLocations);
     const portfolioUrl = parsed.data.portfolioUrl;
+    const profileValues = {
+      id: user.id,
+      email: user.email ?? null,
+      full_name: parsed.data.fullName,
+      bio: parsed.data.bio || null,
+      experience_level: parsed.data.experienceLevel,
+      preferred_roles: preferredRoles,
+      location: preferredLocations[0] ?? null,
+      website_url: portfolioUrl,
+      portfolio_url: portfolioUrl,
+      github_url: parsed.data.githubUrl,
+      linkedin_url: parsed.data.linkedinUrl,
+    };
+    const profileValuesWithoutSocialLinks = {
+      id: user.id,
+      email: user.email ?? null,
+      full_name: parsed.data.fullName,
+      bio: parsed.data.bio || null,
+      experience_level: parsed.data.experienceLevel,
+      preferred_roles: preferredRoles,
+      location: preferredLocations[0] ?? null,
+      website_url: portfolioUrl,
+    };
 
-    const { data: profile, error: profileError } = await admin
+    const profileResult = await admin
       .from("profiles")
-      .upsert(
-        {
-          id: user.id,
-          email: user.email ?? null,
-          full_name: parsed.data.fullName,
-          bio: parsed.data.bio || null,
-          experience_level: parsed.data.experienceLevel,
-          preferred_roles: preferredRoles,
-          location: preferredLocations[0] ?? null,
-          website_url: portfolioUrl,
-          portfolio_url: portfolioUrl,
-          github_url: parsed.data.githubUrl,
-          linkedin_url: parsed.data.linkedinUrl,
-        },
-        { onConflict: "id" },
-      )
+      .upsert(profileValues, { onConflict: "id" })
       .select(
         "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,portfolio_url,github_url,linkedin_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
       )
       .single();
+    let profile = normalizeProfile(profileResult.data);
+    let profileError = profileResult.error;
+
+    if (profileError && isMissingOptionalSocialProfileColumn(profileError)) {
+      const fallbackResult = await admin
+        .from("profiles")
+        .upsert(profileValuesWithoutSocialLinks, { onConflict: "id" })
+        .select(
+          "id,email,full_name,headline,bio,location,timezone,avatar_url,website_url,preferred_roles,experience_level,onboarding_completed,created_at,updated_at",
+        )
+        .single();
+
+      profile = normalizeProfile(fallbackResult.data);
+      profileError = fallbackResult.error;
+    }
 
     if (profileError) {
       return errorResponse(
