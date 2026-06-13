@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { ContactSupportCard } from "@/components/settings/contact-support-card";
+import { PasswordInput } from "@/components/auth/password-input";
 import { TelegramConnectionCard } from "@/components/telegram/telegram-connection-card";
 import type { ApiResponse } from "@/types";
 
@@ -445,6 +446,11 @@ export function SettingsClient({
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isCurrentPasswordVisible, setIsCurrentPasswordVisible] =
+    useState(false);
+  const [isNewPasswordVisible, setIsNewPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
+    useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
   useEffect(() => {
@@ -1032,35 +1038,54 @@ export function SettingsClient({
         <form onSubmit={handlePasswordSubmit} className="mt-5 grid gap-4 lg:grid-cols-3">
           <div>
             <FieldLabel htmlFor="current-password">Current Password</FieldLabel>
-            <input
-              id="current-password"
-              type="password"
-              value={currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
-              className="mt-2 h-11 w-full rounded-md border border-slate-200 px-3 text-sm text-[#0F172A] outline-none transition focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981]/20"
-            />
+            <div className="mt-2">
+              <PasswordInput
+                id="current-password"
+                name="currentPassword"
+                autoComplete="current-password"
+                required={false}
+                value={currentPassword}
+                isVisible={isCurrentPasswordVisible}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                onToggle={() =>
+                  setIsCurrentPasswordVisible((visible) => !visible)
+                }
+              />
+            </div>
           </div>
           <div>
             <FieldLabel htmlFor="new-password">New Password</FieldLabel>
-            <input
-              id="new-password"
-              type="password"
-              minLength={8}
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              className="mt-2 h-11 w-full rounded-md border border-slate-200 px-3 text-sm text-[#0F172A] outline-none transition focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981]/20"
-            />
+            <div className="mt-2">
+              <PasswordInput
+                id="new-password"
+                name="newPassword"
+                autoComplete="new-password"
+                minLength={8}
+                required={false}
+                value={newPassword}
+                isVisible={isNewPasswordVisible}
+                onChange={(event) => setNewPassword(event.target.value)}
+                onToggle={() => setIsNewPasswordVisible((visible) => !visible)}
+              />
+            </div>
           </div>
           <div>
             <FieldLabel htmlFor="confirm-password">Confirm Password</FieldLabel>
-            <input
-              id="confirm-password"
-              type="password"
-              minLength={8}
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              className="mt-2 h-11 w-full rounded-md border border-slate-200 px-3 text-sm text-[#0F172A] outline-none transition focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981]/20"
-            />
+            <div className="mt-2">
+              <PasswordInput
+                id="confirm-password"
+                name="confirmPassword"
+                autoComplete="new-password"
+                minLength={8}
+                required={false}
+                value={confirmPassword}
+                isVisible={isConfirmPasswordVisible}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                onToggle={() =>
+                  setIsConfirmPasswordVisible((visible) => !visible)
+                }
+              />
+            </div>
           </div>
           <div className="lg:col-span-3">
             <button
